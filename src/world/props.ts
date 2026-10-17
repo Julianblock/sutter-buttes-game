@@ -108,9 +108,15 @@ function towerGeometry(): THREE.BufferGeometry {
   return merge(parts);
 }
 
+const PROP_TILE = 2000;
+
 interface Batch {
   geo: THREE.InstancedBufferGeometry;
-  data: number[][];
+  mesh: THREE.Mesh;
+  center: THREE.Vector3;
+  radius: number;
+  tower: boolean;
+  caster?: THREE.Mesh;
 }
 
 /** OSM buildings (houses, farm sheds, rice silos) and the South Butte antenna farm. */
@@ -261,35 +267,57 @@ export class Props {
       this.lights.push(m.x, hf.height(m.x, m.z) + h, m.z, 1, 0.08, 0.04, 3.0, 1);
     }
 
+    // Split each kind into spatial tiles so the GPU only draws what's in view.
     geos.forEach((base, k) => {
-      const rows = data[k];
-      if (!rows.length) return;
-      const g = new THREE.InstancedBufferGeometry();
-      for (const name of Object.keys(base.attributes)) g.setAttribute(name, base.attributes[name]);
-      const n = rows.length;
-      const t0 = new Float32Array(n * 4);
-      const t1 = new Float32Array(n * 4);
-      const wall = new Float32Array(n * 4);
-      const roof = new Float32Array(n * 4);
-      rows.forEach((r, i) => {
-        t0.set(r.slice(0, 4), i * 4);
-        t1.set(r.slice(4, 8), i * 4);
-        wall.set(r.slice(8, 12), i * 4);
-        roof.set(r.slice(12, 16), i * 4);
-      });
-      g.setAttribute('aT0', new THREE.InstancedBufferAttribute(t0, 4));
-      g.setAttribute('aT1', new THREE.InstancedBufferAttribute(t1, 4));
-      g.setAttribute('aWall', new THREE.InstancedBufferAttribute(wall, 4));
-      g.setAttribute('aRoof', new THREE.InstancedBufferAttribute(roof, 4));
-      g.instanceCount = n;
-      const mesh = new THREE.Mesh(g, this.material);
-      mesh.frustumCulled = false;
-      this.group.add(mesh);
-      this.batches.push({ geo: g, data: rows });
+      const byTile = new Map<number, number[][]>();
+      for (const r of data[k]) {
+        const key = k === KIND.TOWER ? -1 : Math.floor(r[0] / PROP_TILE) * 1000 + Math.floor(r[2] / PROP_TILE);
+        const l = byTile.get(key);
+        if (l) l.push(r);
+        else byTile.set(key, [r]);
+      }
+      for (const rows of byTile.values()) {
+        const g = new THREE.InstancedBufferGeometry();
+        for (const name of Object.keys(base.attributes)) g.setAttribute(name, base.attributes[name]);
+        const n = rows.length;
+        const t0 = new Float32Array(n * 4);
+        const t1 = new Float32Array(n * 4);
+        const wall = new Float32Array(n * 4);
+        const roof = new Float32Array(n * 4);
+        const box = new THREE.Box3();
+        rows.forEach((r, i) => {
+          t0.set(r.slice(0, 4), i * 4);
+          t1.set(r.slice(4, 8), i * 4);
+          wall.set(r.slice(8, 12), i * 4);
+          roof.set(r.slice(12, 16), i * 4);
+          const e = Math.max(r[4], r[6]);
+          box.expandByPoint(new THREE.Vector3(r[0] - e, r[1], r[2] - e));
+          box.expandByPoint(new THREE.Vector3(r[0] + e, r[1] + r[5], r[2] + e));
+        });
+        g.setAttribute('aT0', new THREE.InstancedBufferAttribute(t0, 4));
+        g.setAttribute('aT1', new THREE.InstancedBufferAttribute(t1, 4));
+        g.setAttribute('aWall', new THREE.InstancedBufferAttribute(wall, 4));
+        g.setAttribute('aRoof', new THREE.InstancedBufferAttribute(roof, 4));
+        g.instanceCount = n;
+        g.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+        g.boundingBox = box;
+        const mesh = new THREE.Mesh(g, this.material);
+        this.group.add(mesh);
+        this.batches.push({ geo: g, mesh, center: g.boundingSphere.center, radius: g.boundingSphere.radius, tower: k === KIND.TOWER });
+      }
     });
   }
 
+  /** Distance-culls far tiles and limits shadow casting to tiles near the focus. */
+  update(cam: THREE.Vector3, focus: THREE.Vector3) {
+    for (const b of this.batches) {
+      const d = Math.hypot(b.center.x - cam.x, b.center.z - cam.z) - b.radius;
+      b.mesh.visible = b.tower || d < 14000;
+      if (b.caster) b.caster.visible = Math.hypot(b.center.x - focus.x, b.center.z - focus.z) - b.radius < 700;
+    }
+  }
+
   addShadowCasters(shadow: ShadowMap) {
-    for (const b of this.batches) shadow.addCaster(b.geo, this.shadowMaterial);
+    for (const b of this.batches) b.caster = shadow.addCaster(b.geo, this.shadowMaterial);
   }
 }
