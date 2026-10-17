@@ -64,7 +64,7 @@ export const WEATHERS: Record<Weather, { label: string; mie: number; cloud: numb
 
 // Month keyframes (Jan..Dec) for vegetation state in the Sacramento Valley.
 const K = {
-  green: [0.9, 1, 1, 0.85, 0.4, 0.1, 0, 0, 0, 0.05, 0.35, 0.75],
+  green: [0.9, 1, 1, 1, 0.6, 0.15, 0, 0, 0, 0.05, 0.35, 0.75],
   oakLeaf: [0, 0, 0.3, 0.9, 1, 1, 1, 1, 1, 0.9, 0.6, 0.2],
   flowers: [0, 0.1, 0.8, 1, 0.3, 0, 0, 0, 0, 0, 0, 0],
   wetFlood: [1, 1, 0.8, 0.5, 0.3, 0.2, 0.1, 0.1, 0.3, 0.6, 0.9, 1],
