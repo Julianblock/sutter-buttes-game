@@ -112,7 +112,7 @@ out geom;`;
     }
     if (!e.geometry) continue;
     if (t.highway) {
-      out.roads.push({ name: t.name || t.ref || '', kind: t.highway.replace('_link', ''), lanes: Number(t.lanes) || 0, pts: toLine(e.geometry) });
+      out.roads.push({ name: t.name || t.ref || '', kind: t.highway.replace('_link', ''), lanes: Number(t.lanes) || 0, oneway: t.oneway === 'yes' || t.highway === 'motorway' ? 1 : t.oneway === '-1' ? -1 : 0, pts: toLine(e.geometry) });
     } else if (t.waterway) {
       out.waterways.push({ name: t.name || '', kind: t.waterway, pts: toLine(e.geometry) });
     } else if (t.natural === 'water') {

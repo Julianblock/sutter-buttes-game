@@ -42,6 +42,7 @@ export interface OsmRoad {
   name: string;
   kind: string;
   lanes: number;
+  oneway?: number;
   pts: number[];
 }
 
