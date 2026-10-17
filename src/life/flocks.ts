@@ -326,4 +326,14 @@ export class Flocks {
   get count() {
     return this.geo.instanceCount;
   }
+
+  /** Distance from p to the nearest flock centre of a species (Infinity if none). */
+  nearest(p: THREE.Vector3, species: number) {
+    let best = Infinity;
+    for (const f of this.flocks) {
+      if (f.species !== species) continue;
+      best = Math.min(best, Math.hypot(f.x - p.x, f.y - p.y, f.z - p.z) - f.radius);
+    }
+    return Math.max(0, best);
+  }
 }
