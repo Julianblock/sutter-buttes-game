@@ -159,7 +159,7 @@ vec3 applyAtmosphere(vec3 color, vec3 wp) {
   float dFull = dy < -0.002 ? min(max(y0, 1.0) / -dy, 300000.0) : 300000.0;
   vec3 tauFull = RAYLEIGH_SCAT * layerDepth(y0, dy, dFull, RAYLEIGH_H)
                + vec3(MIE_EXT * uMieScale) * layerDepth(y0, dy, dFull, MIE_H);
-  vec3 sky = skyRadianceDir(normalize(vec3(dir.x, max(dir.y, -0.03), dir.z)));
+  vec3 sky = skyRadianceDir(dir);
   vec3 inscatter = sky * clamp((1.0 - T) / max(1.0 - exp(-tauFull), vec3(1e-4)), 0.0, 1.0);
   color = color * T + inscatter;
 
