@@ -1,6 +1,6 @@
 // Builds the real-world datasets the game streams at runtime.
 //   node scripts/fetch-data.mjs [step...]
-// Steps: height, imagery, landcover, osm (default: all)
+// Steps: height, imagery, landcover, derived, osm (default: all)
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import { CENTER } from './lib/geo.mjs';
 import { buildMosaic } from './lib/tiles.mjs';
 import { buildLandcover, LC } from './lib/landcover.mjs';
 import { buildOsm } from './lib/osm.mjs';
+import { canopyMask, horizonAO, readHeight } from './lib/derived.mjs';
 
 const OUT = path.resolve('public/data');
 
@@ -114,6 +115,40 @@ const steps = {
       .png({ compressionLevel: 9 })
       .toFile(path.join(OUT, 'landcover.png'));
     await writeMeta({ landcover: { size, res, classes: LC } });
+  },
+  async derived() {
+    for (const name of ['inner', 'mid']) {
+      console.log(`ao/${name}`);
+      const r = REGIONS[name];
+      const file = path.join(OUT, `height_${name}.png`);
+      const { h, N, raw, channels } = await readHeight(file, HEIGHT_ENCODING[name]);
+      const ao = horizonAO(h, N, r.size / N);
+      const outBuf = Buffer.alloc(N * N * 3);
+      for (let i = 0; i < N * N; i++) {
+        outBuf[i * 3] = raw[i * channels];
+        outBuf[i * 3 + 1] = raw[i * channels + 1];
+        outBuf[i * 3 + 2] = Math.round(ao[i] * 255);
+      }
+      await sharp(outBuf, { raw: { width: N, height: N, channels: 3 } }).png({ compressionLevel: 9 }).toFile(file + '.tmp');
+      await fs.rename(file + '.tmp', file);
+    }
+
+    console.log('canopy/inner');
+    const lc = await sharp(path.join(OUT, 'landcover.png')).raw().toBuffer({ resolveWithObject: true });
+    const lcRes = lc.info.width;
+    const res = 1024;
+    const inner = REGIONS.inner.size;
+    const treeClasses = new Set([LC.GRASS, LC.WOODLAND]);
+    const mask = await canopyMask(path.join(OUT, 'imagery_inner.jpg'), res, (i, j) => {
+      const x = -inner / 2 + ((i + 0.5) / res) * inner;
+      const z = -inner / 2 + ((j + 0.5) / res) * inner;
+      const li = Math.floor((x / REGIONS.mid.size + 0.5) * lcRes);
+      const lj = Math.floor((z / REGIONS.mid.size + 0.5) * lcRes);
+      return treeClasses.has(lc.data[(lj * lcRes + li) * lc.info.channels]);
+    });
+    await sharp(Buffer.from(mask), { raw: { width: res, height: res, channels: 1 } })
+      .png({ compressionLevel: 9 })
+      .toFile(path.join(OUT, 'canopy_inner.png'));
   },
   async osm() {
     console.log('osm/mid');
