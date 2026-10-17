@@ -371,8 +371,8 @@ export class Traffic {
         const tcx = -dx / Math.sqrt(d2 + 1);
         const tcz = -dz / Math.sqrt(d2 + 1);
         const facing = ux * tcx + uz * tcz;
-        const front = 0.25 + 3.0 * Math.pow(Math.max(0, facing), 6);
-        const rear = 0.15 + 0.5 * Math.max(0, -facing);
+        const front = 0.7 + 6.0 * Math.pow(Math.max(0, facing), 6);
+        const rear = 0.35 + 0.8 * Math.max(0, -facing);
         const led = c.headlight < 0.45;
         const hr = led ? 0.85 : 1;
         const hg = led ? 0.92 : 0.82;
