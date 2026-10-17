@@ -19,6 +19,8 @@ import { Controls } from './birds/input';
 import { SPECIES, speciesById, type Palette } from './birds/species';
 import { Trees } from './veg/trees';
 import { ShadowMap } from './render/shadows';
+import { Props } from './world/props';
+import { LightPoints } from './render/lightPoints';
 import { createBirdShadowMaterial } from './birds/birdShader';
 import { LoadingScreen } from './ui/loading';
 import { Menu } from './ui/menu';
@@ -77,6 +79,11 @@ async function boot() {
   const seasonMonth = () => env.month - 1 + (env.day - 1) / 30;
   trees.setSeason(seasonMonth());
 
+  loading.progress('Raising barns and broadcast towers', 0.97);
+  const props = new Props(world.osm, heightfield);
+  const lights = new LightPoints(props.lights);
+  engine.scene.add(props.group, lights.points);
+
   const air = new AirField(heightfield);
   const species = speciesById(settings.bird) ?? SPECIES[0];
   const player = new Player(species, paletteFor(settings), heightfield, air);
@@ -86,6 +93,7 @@ async function boot() {
 
   const shadow = new ShadowMap();
   trees.addShadowCasters(shadow);
+  props.addShadowCasters(shadow);
   player.shadowCaster = shadow.addCaster(player.model.geometry, createBirdShadowMaterial(), player.object);
 
   const cam = engine.camera;
@@ -270,6 +278,7 @@ async function boot() {
     terrainShadow.update();
     terrain.update(cam);
     trees.update(cam);
+    lights.resize(cam, window.innerHeight * engine.pixelRatio);
     shadow.update(engine.renderer, free ? cam.position : player.object.position);
     sky.update(cam, env.exposure);
     engine.render(env.exposure, G.uNight.value, G.uTime.value);
@@ -280,7 +289,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees,
+    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     setMode,
   });
