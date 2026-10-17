@@ -20,6 +20,7 @@ import { SPECIES, speciesById, type Palette } from './birds/species';
 import { Trees } from './veg/trees';
 import { ShadowMap } from './render/shadows';
 import { Props } from './world/props';
+import { PowerLines } from './world/powerLines';
 import { LightPoints } from './render/lightPoints';
 import { Traffic } from './life/traffic';
 import { Roads } from './world/roads';
@@ -86,9 +87,10 @@ async function boot() {
   trees.setSeason(seasonMonth());
 
   loading.progress('Raising barns and broadcast towers', 0.97);
-  const props = new Props(world.osm, heightfield);
+  const power = new PowerLines(world.osm, heightfield);
+  const props = new Props(world.osm, heightfield, power.pylons);
   const lights = new LightPoints(props.lights);
-  engine.scene.add(props.group, lights.points);
+  engine.scene.add(props.group, lights.points, power.mesh);
   const roads = new Roads(world.osm, heightfield);
   engine.scene.add(roads.group);
   const traffic = new Traffic(world.osm, heightfield);
@@ -357,6 +359,7 @@ async function boot() {
     trees.update(cam);
     lights.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.lights.resize(cam, window.innerHeight * engine.pixelRatio);
+    power.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.update(dt, cam.position, G.uNight.value);
     wildlife.update(dt, cam.position, player.object.position);
     flocks.setMonth(env.month);
@@ -375,7 +378,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound,
+    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     setMode,
   });
