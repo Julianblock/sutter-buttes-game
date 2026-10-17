@@ -71,7 +71,7 @@ void main() {
   vec3 T = vec3(1.0);
   float cosTheta = dot(dir, sunDir);
   float phR = rayleighPhase(cosTheta);
-  float phM = miePhase(cosTheta, 0.8);
+  float phM = miePhase(cosTheta, 0.76);
   float prevT = 0.0;
   for (int i = 0; i < STEPS; i++) {
     float f = (float(i) + 0.3) / float(STEPS);
@@ -88,7 +88,9 @@ void main() {
     float scatM = MIE_SCAT * uMieScale * mieDensity(h);
     vec3 ext = extinctionAt(h);
     // Cheap multiple scattering: isotropic light proportional to the sunlit fraction.
-    vec3 ms = (scatR + scatM) * 0.08 * smoothstep(-0.12, 0.1, sunMu);
+    // Tinted by the (reddened) sunlight reaching this altitude so dusk glows warm.
+    vec3 Tdiff = transmittanceToTop(pr, max(sunMu, 0.08));
+    vec3 ms = (scatR + scatM) * 0.06 * mix(Tdiff, vec3(dot(Tdiff, vec3(0.333))), 0.35) * smoothstep(-0.16, 0.06, sunMu);
     vec3 S = (scatR * phR + scatM * phM) * Tsun + ms;
     vec3 sampleT = exp(-ext * dt);
     vec3 Sint = (S - S * sampleT) / max(ext, vec3(1e-9));
