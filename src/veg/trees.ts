@@ -225,6 +225,8 @@ export class Trees {
     const a0 = this.inst0.map((a) => a.array as Float32Array);
     const a1 = this.inst1.map((a) => a.array as Float32Array);
     const half = TILE / 2 + 12;
+    // Visible tiles nearest-first, so instance caps only ever drop the farthest trees.
+    const vis: [number, Tile][] = [];
     for (const t of this.tiles) {
       const dx = Math.max(Math.abs(t.cx - cx) - half, 0);
       const dz = Math.max(Math.abs(t.cz - cz) - half, 0);
@@ -234,6 +236,10 @@ export class Trees {
       this.box.min.set(t.cx - half, t.minY - 2, t.cz - half);
       this.box.max.set(t.cx + half, t.maxY + 2, t.cz + half);
       if (!this.frustum.intersectsBox(this.box)) continue;
+      vis.push([tileDist, t]);
+    }
+    vis.sort((a, b) => a[0] - b[0]);
+    for (const [, t] of vis) {
       const d = t.data;
       for (let i = 0; i < t.count; i++) {
         const o = i * 8;
