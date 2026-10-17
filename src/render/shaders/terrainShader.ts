@@ -156,9 +156,17 @@ void main() {
   waterFrac *= smoothstep(0.30, 0.12, slope);
 
   // Ground detail up close.
-  alb *= mix(1.0, 0.82 + 0.36 * vnoise(xz / 2.3) * (0.7 + 0.6 * nB), detailFade);
-  vec2 bump = vec2(vnoise(xz / 1.3) - vnoise(xz / 1.3 + vec2(0.6, 0.0)), vnoise(xz / 1.3) - vnoise(xz / 1.3 + vec2(0.0, 0.6)));
-  n = normalize(n + vec3(bump.x, 0.0, bump.y) * (0.25 + rocky * 0.6) * detailFade);
+  // Rotated octaves so the value-noise lattice never lines up into dots.
+  const mat2 ROT = mat2(0.8, 0.6, -0.6, 0.8);
+  vec2 q1 = ROT * xz;
+  vec2 q2 = ROT * q1;
+  float fine = vnoise(q1 / 2.9) * 0.5 + vnoise(q2 / 1.1) * 0.3 + vnoise(xz / 0.45) * 0.2;
+  float nearFade = clamp(1.0 - dist / 400.0, 0.0, 1.0);
+  alb *= mix(1.0, 0.86 + 0.28 * fine, detailFade);
+  float h0 = vnoise(q1 / 3.7) + 0.5 * vnoise(q2 / 1.4);
+  float hx = vnoise((q1 + vec2(0.5, 0.0)) / 3.7) + 0.5 * vnoise((q2 + vec2(0.5, 0.0)) / 1.4);
+  float hz = vnoise((q1 + vec2(0.0, 0.5)) / 3.7) + 0.5 * vnoise((q2 + vec2(0.0, 0.5)) / 1.4);
+  n = normalize(n + vec3(h0 - hx, 0.0, h0 - hz) * (0.12 + rocky * 0.5) * nearFade);
 
   float shadow = shadowAt(vWorld + n * 0.6, 0.0008);
   vec3 color = shadeSurface(alb, n, vWorld, ao, 0.92, shadow);
