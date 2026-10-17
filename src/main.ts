@@ -22,6 +22,7 @@ import { ShadowMap } from './render/shadows';
 import { Props } from './world/props';
 import { PowerLines } from './world/powerLines';
 import { Grass } from './veg/grass';
+import { WindParticles } from './life/windParticles';
 import { LightPoints } from './render/lightPoints';
 import { Traffic } from './life/traffic';
 import { Roads } from './world/roads';
@@ -88,6 +89,8 @@ async function boot() {
   trees.setSeason(seasonMonth());
   const grass = new Grass(terrain.material.uniforms, heightfield);
   engine.scene.add(grass.group);
+  const motes = new WindParticles();
+  engine.scene.add(motes.points);
 
   loading.progress('Raising barns and broadcast towers', 0.97);
   const power = new PowerLines(world.osm, heightfield);
@@ -384,6 +387,7 @@ async function boot() {
     terrain.update(cam);
     trees.update(cam);
     grass.update(cam.position, seasonMonth());
+    motes.update(cam, heightfield.height(cam.position.x, cam.position.z), window.innerHeight * engine.pixelRatio, 1 - G.uNight.value * 0.9);
     lights.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.lights.resize(cam, window.innerHeight * engine.pixelRatio);
     power.resize(cam, window.innerHeight * engine.pixelRatio);
