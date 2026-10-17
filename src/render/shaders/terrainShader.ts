@@ -173,7 +173,8 @@ void main() {
     vec3 sun = sunRadiance(vWorld.y) * shadow;
     float glint = pow(max(dot(R, uSunDir), 0.0), 900.0) * 140.0 + pow(max(dot(R, uSunDir), 0.0), 60.0) * 0.6;
     float glintM = pow(max(dot(R, uMoonDir), 0.0), 700.0) * 90.0;
-    vec3 body = vec3(0.020, 0.024, 0.016) * skyAmbient(vec3(0, 1, 0), 1.0) / PI;
+    // The aerial photo already shows each pond's colour seen from overhead.
+    vec3 body = color * 0.75;
     vec3 water = mix(body, refl, F) + sun * glint * F + moonRadiance(vWorld.y) * glintM * F;
     color = mix(color, water, waterFrac);
   }
