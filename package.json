@@ -8,5 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "data": "node scripts/fetch-data.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
   }
 }
