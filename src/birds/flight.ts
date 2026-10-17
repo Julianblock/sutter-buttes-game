@@ -14,11 +14,12 @@ export interface FlightInput {
   flap: number; // 0..1
   tuck: number; // 0..1 dive
   brake: number; // 0..1 flare / airbrake
+  boost: number; // 0..1 hard flapping sprint
   takeoff: boolean;
 }
 
 export function emptyInput(): FlightInput {
-  return { pitch: 0, roll: 0, yaw: 0, flap: 0, tuck: 0, brake: 0, takeoff: false };
+  return { pitch: 0, roll: 0, yaw: 0, flap: 0, tuck: 0, brake: 0, boost: 0, takeoff: false };
 }
 
 function clamp(x: number, a: number, b: number) {
@@ -116,13 +117,13 @@ export class FlightModel {
     a *= 1 + 3.5 * inp.brake;
     const b = (g * vStar * vStar) / (2 * LD) * (1 + inp.tuck * 2);
 
-    // Bank: roll input drives roll rate; release levels the wings gently.
+    // Bank: roll input commands a bank angle (not a roll rate), so letting go
+    // rolls the wings level promptly instead of carrying on round the turn.
     const agility = f.climb * (1 + 0.6 * inp.tuck);
-    const maxBank = f.soarer ? 1.15 : 1.25;
-    const rollRate = 2.2 * agility;
-    if (Math.abs(inp.roll) > 0.02) this.phi += inp.roll * rollRate * dt;
-    else this.phi = approach(this.phi, 0, 1.1, dt);
-    this.phi = clamp(this.phi, -maxBank, maxBank);
+    const maxBank = f.soarer ? 1.0 : 1.1;
+    const target = inp.roll * maxBank;
+    const rate = (Math.abs(target) > Math.abs(this.phi) ? 2.2 : 3.2) * Math.min(agility, 1.3);
+    this.phi = clamp(approach(this.phi, target, rate, dt), -maxBank, maxBank);
 
     // Load factor: neutral holds the path (coordinated turn), pitch input pulls.
     const nMax = Math.min(4.5, (V / vs) ** 2);
@@ -141,10 +142,12 @@ export class FlightModel {
     this.stallTimer = stalled ? this.stallTimer + dt : 0;
 
     // Thrust from flapping; strongest at low speed, fading past cruise.
-    const flapWanted = inp.flap > 0 || this.takeoffBoost > 0 ? Math.max(inp.flap, this.takeoffBoost > 0 ? 1 : 0) : 0;
+    const flapWanted = Math.max(inp.flap, inp.boost, this.takeoffBoost > 0 ? 1 : 0);
     this.flapAmount = approach(this.flapAmount, flapWanted, 6, dt);
     let T = this.flapAmount * f.flapPower * clamp(1.6 - V / (vStar * 1.6), 0, 1.4);
     if (f.hover && inp.brake > 0.3 && inp.flap > 0) T += g * 0.4;
+    // Sprint: powered flight well past cruise, tailing off toward dive speeds.
+    T += inp.boost * g * 0.55 * clamp(1.3 - V / (f.maxDive * 0.55), 0, 1);
     this.takeoffBoost = Math.max(0, this.takeoffBoost - dt);
 
     const D = a * V * V + (b * n * n) / (V * V);
