@@ -52,13 +52,14 @@ export const TIMES: Record<TimePreset, { label: string }> = {
   dusk: { label: 'Dusk' },
 };
 
-export const WEATHERS: Record<Weather, { label: string; mie: number; cloud: number; fog: number; fogTop: number }> = {
-  crisp: { label: 'Crystal Clear (after rain)', mie: 0.45, cloud: 0.12, fog: 0, fogTop: -1000 },
-  clear: { label: 'Clear', mie: 1.5, cloud: 0.04, fog: 0, fogTop: -1000 },
-  hazy: { label: 'Valley Haze', mie: 4.0, cloud: 0.0, fog: 0, fogTop: -1000 },
-  partly: { label: 'Scattered Clouds', mie: 1.3, cloud: 0.5, fog: 0, fogTop: -1000 },
-  overcast: { label: 'Overcast', mie: 2.2, cloud: 0.97, fog: 0, fogTop: -1000 },
-  tulefog: { label: 'Tule Fog', mie: 1.8, cloud: 0.0, fog: 0.011, fogTop: 135 },
+/** `wind` is mean surface wind speed (m/s). */
+export const WEATHERS: Record<Weather, { label: string; mie: number; cloud: number; fog: number; fogTop: number; wind: number }> = {
+  crisp: { label: 'Crystal Clear (after rain)', mie: 0.45, cloud: 0.12, fog: 0, fogTop: -1000, wind: 6.5 },
+  clear: { label: 'Clear', mie: 1.5, cloud: 0.04, fog: 0, fogTop: -1000, wind: 3.5 },
+  hazy: { label: 'Valley Haze', mie: 4.0, cloud: 0.0, fog: 0, fogTop: -1000, wind: 1.3 },
+  partly: { label: 'Scattered Clouds', mie: 1.3, cloud: 0.5, fog: 0, fogTop: -1000, wind: 4.5 },
+  overcast: { label: 'Overcast', mie: 2.2, cloud: 0.97, fog: 0, fogTop: -1000, wind: 5.0 },
+  tulefog: { label: 'Tule Fog', mie: 1.8, cloud: 0.0, fog: 0.011, fogTop: 135, wind: 0.4 },
 };
 
 // Month keyframes (Jan..Dec) for vegetation state in the Sacramento Valley.
@@ -102,6 +103,7 @@ export class Environment {
   sunAltitude = 0;
   exposure = 0.3;
   geese = 0;
+  private windT = 0;
   private sunVec = new THREE.Vector3();
   private moonVec = new THREE.Vector3();
 
@@ -212,6 +214,17 @@ export class Environment {
     G.uCloudCover.value = w.cloud;
     G.uFogDensity.value = w.fog;
     G.uFogTop.value = w.fogTop;
+
+    // Surface wind: post-frontal north wind after rain and in winter, the
+    // southwesterly Delta breeze on summer days. Strength and direction wander.
+    this.windT += dt;
+    const t = this.windT;
+    const summer = Math.max(0, Math.cos(((this.month - 7) / 12) * Math.PI * 2));
+    const north = this.weather === 'crisp' ? 1 : 1 - summer;
+    const from = THREE.MathUtils.lerp(-2.36, 0.15, north) + 0.25 * Math.sin(t * 0.021) + 0.1 * Math.sin(t * 0.077);
+    const speed = w.wind * (0.85 + 0.2 * Math.sin(t * 0.033) + 0.12 * Math.sin(t * 0.13 + 1.3));
+    // 'from' is the bearing the wind blows from (0 = north); it blows toward the opposite.
+    G.uWind.value.set(-Math.sin(from) * speed, Math.cos(from) * speed);
 
     const mf = this.month + (this.day - 1) / 30;
     G.uYearPhase.value = (mf - 1) / 12;
