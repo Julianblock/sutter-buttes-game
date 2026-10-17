@@ -1,0 +1,280 @@
+import * as THREE from 'three';
+import { G } from '../render/globals';
+import type { ShadowMap } from '../render/shadows';
+import type { Heightfield } from '../world/heightfield';
+import { LC } from '../world/meta';
+import { buildTree } from './treeGeometry';
+import { SPECIES_COUNT, treeFragment, treeVertex } from './treeShader';
+
+export const TREE = { BLUE_OAK: 0, LIVE_OAK: 1, VALLEY_OAK: 2, COTTONWOOD: 3, SHRUB: 4 } as const;
+
+const TILE = 250;
+const LOD0 = 420;
+const LOD1 = 1900;
+const LOD2 = 6500;
+const CAP = [14000, 70000, 90000];
+
+// Month keyframes (Jan..Dec) for leaf amount per species.
+const LEAF_KF: number[][] = [
+  [0.05, 0.05, 0.35, 0.9, 1, 1, 1, 1, 1, 0.92, 0.6, 0.15], // blue oak
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // live oak
+  [0.02, 0.02, 0.4, 0.95, 1, 1, 1, 1, 1, 0.9, 0.5, 0.08], // valley oak
+  [0.0, 0.0, 0.5, 1, 1, 1, 1, 1, 1, 0.9, 0.45, 0.02], // cottonwood
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // shrubs
+];
+
+// Leaf colour keyframes: [winter, spring, summer, fall] (sRGB hex).
+const LEAF_COL: string[][] = [
+  ['#6a665a', '#6f8a46', '#5b6552', '#7e7046'],
+  ['#2f3a26', '#3f522c', '#323e27', '#323d26'],
+  ['#66625a', '#728f45', '#4f5f34', '#8a7740'],
+  ['#706a5e', '#8aa84b', '#5f7a38', '#c99c34'],
+  ['#3e4630', '#4a5f33', '#41492f', '#55502f'],
+];
+const BARK = ['#8a857a', '#4c4640', '#5c554c', '#8a8274', '#4a4436'];
+
+function kf(keys: number[], m: number) {
+  const i0 = ((Math.floor(m) % 12) + 12) % 12;
+  const i1 = (i0 + 1) % 12;
+  const t = m - Math.floor(m);
+  return keys[i0] + (keys[i1] - keys[i0]) * t;
+}
+
+function hash(n: number) {
+  const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+interface Tile {
+  data: Float32Array; // 8 floats per tree: x y z rot r h species seed
+  count: number;
+  cx: number;
+  cz: number;
+  minY: number;
+  maxY: number;
+}
+
+/** Real oak woodland: every tree crown detected in the aerial imagery. */
+export class Trees {
+  readonly group = new THREE.Group();
+  readonly material: THREE.ShaderMaterial;
+  private tiles: Tile[] = [];
+  private geos: THREE.InstancedBufferGeometry[] = [];
+  private inst0: THREE.InstancedBufferAttribute[] = [];
+  private inst1: THREE.InstancedBufferAttribute[] = [];
+  private lastPos = new THREE.Vector3(1e9, 0, 0);
+  private lastQuat = new THREE.Quaternion();
+  private frustum = new THREE.Frustum();
+  private projView = new THREE.Matrix4();
+  private box = new THREE.Box3();
+  counts = [0, 0, 0];
+  total = 0;
+
+  constructor(buf: ArrayBuffer, zone: number, hf: Heightfield) {
+    const leafCol = Array.from({ length: SPECIES_COUNT }, () => new THREE.Color());
+    const bark = BARK.map((h) => new THREE.Color(h));
+    this.material = new THREE.ShaderMaterial({
+      glslVersion: THREE.GLSL3,
+      vertexShader: treeVertex,
+      fragmentShader: treeFragment,
+      uniforms: {
+        ...G,
+        uLeafColor: { value: leafCol },
+        uBarkColor: { value: bark },
+        uLeafAmount: { value: new Array(SPECIES_COUNT).fill(1) },
+        uFallTint: { value: new THREE.Color('#a0783a') },
+      },
+      side: THREE.DoubleSide,
+    });
+
+    for (let lod = 0; lod < 3; lod++) {
+      const base = buildTree(lod as 0 | 1 | 2, 7 + lod);
+      const g = new THREE.InstancedBufferGeometry();
+      g.index = base.index;
+      for (const k of Object.keys(base.attributes)) g.setAttribute(k, base.attributes[k]);
+      const a0 = new THREE.InstancedBufferAttribute(new Float32Array(CAP[lod] * 4), 4);
+      const a1 = new THREE.InstancedBufferAttribute(new Float32Array(CAP[lod] * 4), 4);
+      a0.setUsage(THREE.DynamicDrawUsage);
+      a1.setUsage(THREE.DynamicDrawUsage);
+      g.setAttribute('aInst0', a0);
+      g.setAttribute('aInst1', a1);
+      g.instanceCount = 0;
+      const mesh = new THREE.Mesh(g, this.material);
+      mesh.frustumCulled = false;
+      this.group.add(mesh);
+      this.geos.push(g);
+      this.inst0.push(a0);
+      this.inst1.push(a1);
+    }
+    this.decode(buf, zone, hf);
+  }
+
+  /** Registers the near tree LODs as shadow casters. */
+  addShadowCasters(shadow: ShadowMap) {
+    const mat = new THREE.ShaderMaterial({
+      glslVersion: THREE.GLSL3,
+      vertexShader: treeVertex,
+      fragmentShader: treeFragment,
+      uniforms: this.material.uniforms,
+      defines: { SHADOW_PASS: '' },
+      side: THREE.DoubleSide,
+    });
+    shadow.addCaster(this.geos[0], mat);
+    shadow.addCaster(this.geos[1], mat);
+  }
+
+  private decode(buf: ArrayBuffer, zone: number, hf: Heightfield) {
+    const v = new DataView(buf);
+    const n = buf.byteLength / 6;
+    const tilesN = Math.ceil(zone / TILE);
+    const lists: number[][] = Array.from({ length: tilesN * tilesN }, () => []);
+    for (let k = 0; k < n; k++) {
+      const x = (v.getUint16(k * 6, true) / 65535 - 0.5) * zone;
+      const z = (v.getUint16(k * 6 + 2, true) / 65535 - 0.5) * zone;
+      const rImg = v.getUint8(k * 6 + 4) / 20;
+      const dark = v.getUint8(k * 6 + 5) / 255;
+      const y = hf.height(x, z);
+      const seed = hash(k * 0.61803 + x * 0.001);
+      let sp: number;
+      // Imagery blobs include the crown's shadow; trim to the crown itself.
+      let r = rImg * 0.82;
+      let h: number;
+      const lc = hf.landcover(x, z);
+      if (rImg < 2.7) {
+        sp = TREE.SHRUB;
+        r = 1.0 + rImg * 0.35 + seed * 0.4;
+        h = 1.2 + seed * 1.6;
+      } else if (y > 42) {
+        sp = dark > 0.52 && seed < 0.75 ? TREE.LIVE_OAK : y < 80 && seed > 0.88 ? TREE.VALLEY_OAK : TREE.BLUE_OAK;
+        r = Math.max(r, 2.6) * (1.05 + seed * 0.3);
+        // Oaks on the Buttes are broad, low-domed trees, about as wide as tall.
+        h = sp === TREE.LIVE_OAK ? r * 1.15 + 2.2 : sp === TREE.VALLEY_OAK ? r * 1.6 + 3 : r * 1.3 + 2.4;
+      } else {
+        const wet = lc === LC.WETLAND || lc === LC.WATER;
+        sp = wet && seed < 0.5 ? TREE.COTTONWOOD : TREE.VALLEY_OAK;
+        r = Math.max(r, 3) * (1.05 + seed * 0.3);
+        h = sp === TREE.COTTONWOOD ? r * 2.4 + 4 : r * 1.6 + 3.5;
+      }
+      const ti = Math.floor((x + zone / 2) / TILE);
+      const tj = Math.floor((z + zone / 2) / TILE);
+      if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) continue;
+      lists[tj * tilesN + ti].push(x, y - 0.35, z, seed * 6.2831, r, h, sp, hash(seed * 17.3));
+    }
+    for (let tj = 0; tj < tilesN; tj++) {
+      for (let ti = 0; ti < tilesN; ti++) {
+        const l = lists[tj * tilesN + ti];
+        if (!l.length) continue;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (let i = 0; i < l.length; i += 8) {
+          minY = Math.min(minY, l[i + 1]);
+          maxY = Math.max(maxY, l[i + 1] + l[i + 5]);
+        }
+        this.tiles.push({
+          data: new Float32Array(l),
+          count: l.length / 8,
+          cx: -zone / 2 + (ti + 0.5) * TILE,
+          cz: -zone / 2 + (tj + 0.5) * TILE,
+          minY,
+          maxY,
+        });
+        this.total += l.length / 8;
+      }
+    }
+  }
+
+  /** Seasonal foliage: leaf-out, colour and autumn tint for the given month (0 = Jan 1). */
+  setSeason(month: number) {
+    const u = this.material.uniforms;
+    const amount = u.uLeafAmount.value as number[];
+    const cols = u.uLeafColor.value as THREE.Color[];
+    // Weights for winter / spring / summer / fall colour keys.
+    const w = [
+      kf([1, 0.8, 0.2, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.8], month),
+      kf([0, 0.2, 0.8, 1, 0.7, 0.2, 0, 0, 0, 0, 0, 0], month),
+      kf([0, 0, 0, 0, 0.3, 0.8, 1, 1, 0.7, 0.2, 0, 0], month),
+      kf([0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.8, 0.8, 0.2], month),
+    ];
+    const sum = w.reduce((a, b) => a + b, 0) || 1;
+    const c = new THREE.Color();
+    for (let s = 0; s < SPECIES_COUNT; s++) {
+      amount[s] = kf(LEAF_KF[s], month);
+      cols[s].setRGB(0, 0, 0);
+      for (let k = 0; k < 4; k++) {
+        c.set(LEAF_COL[s][k]);
+        cols[s].r += (c.r * w[k]) / sum;
+        cols[s].g += (c.g * w[k]) / sum;
+        cols[s].b += (c.b * w[k]) / sum;
+      }
+    }
+    (u.uFallTint.value as THREE.Color).set(w[3] / sum > 0.3 ? '#b07a30' : '#5d6a3a');
+  }
+
+  update(camera: THREE.PerspectiveCamera) {
+    const moved = camera.position.distanceTo(this.lastPos);
+    const turned = 1 - Math.abs(camera.quaternion.dot(this.lastQuat));
+    if (moved < 25 && turned < 0.002) return;
+    this.lastPos.copy(camera.position);
+    this.lastQuat.copy(camera.quaternion);
+    this.projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.projView);
+    const cx = camera.position.x;
+    const cy = camera.position.y;
+    const cz = camera.position.z;
+    const n = [0, 0, 0];
+    const a0 = this.inst0.map((a) => a.array as Float32Array);
+    const a1 = this.inst1.map((a) => a.array as Float32Array);
+    const half = TILE / 2 + 12;
+    for (const t of this.tiles) {
+      const dx = Math.max(Math.abs(t.cx - cx) - half, 0);
+      const dz = Math.max(Math.abs(t.cz - cz) - half, 0);
+      const dy = Math.max(t.minY - cy, cy - t.maxY, 0);
+      const tileDist = Math.sqrt(dx * dx + dz * dz + dy * dy);
+      if (tileDist > LOD2) continue;
+      this.box.min.set(t.cx - half, t.minY - 2, t.cz - half);
+      this.box.max.set(t.cx + half, t.maxY + 2, t.cz + half);
+      if (!this.frustum.intersectsBox(this.box)) continue;
+      const d = t.data;
+      for (let i = 0; i < t.count; i++) {
+        const o = i * 8;
+        const ex = d[o] - cx;
+        const ey = d[o + 1] - cy;
+        const ez = d[o + 2] - cz;
+        const dist = Math.sqrt(ex * ex + ey * ey + ez * ez);
+        let lod = dist < LOD0 ? 0 : dist < LOD1 ? 1 : 2;
+        let scale = 1;
+        if (lod === 2) {
+          if (dist > LOD2) continue;
+          // Thin small trees with distance; survivors grow slightly to keep cover.
+          const keep = d[o + 6] === TREE.SHRUB ? 0 : Math.min(1, 1.25 - dist / LOD2);
+          if (d[o + 7] > keep) continue;
+          scale = 1 + (1 - keep) * 0.35;
+        } else if (lod === 1 && d[o + 6] === TREE.SHRUB && dist > 1100) continue;
+        if (n[lod] >= CAP[lod]) {
+          if (lod === 2) continue;
+          lod++;
+          if (n[lod] >= CAP[lod]) continue;
+        }
+        const k = n[lod]++ * 4;
+        a0[lod][k] = d[o];
+        a0[lod][k + 1] = d[o + 1];
+        a0[lod][k + 2] = d[o + 2];
+        a0[lod][k + 3] = d[o + 3];
+        a1[lod][k] = d[o + 4] * scale;
+        a1[lod][k + 1] = d[o + 5] * scale;
+        a1[lod][k + 2] = d[o + 6];
+        a1[lod][k + 3] = d[o + 7];
+      }
+    }
+    for (let lod = 0; lod < 3; lod++) {
+      this.geos[lod].instanceCount = n[lod];
+      this.inst0[lod].clearUpdateRanges();
+      this.inst0[lod].addUpdateRange(0, n[lod] * 4);
+      this.inst0[lod].needsUpdate = true;
+      this.inst1[lod].clearUpdateRanges();
+      this.inst1[lod].addUpdateRange(0, n[lod] * 4);
+      this.inst1[lod].needsUpdate = true;
+    }
+    this.counts = n;
+  }
+}
