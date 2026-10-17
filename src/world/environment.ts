@@ -23,6 +23,14 @@ export type TimePreset =
   | 'sunset'
   | 'dusk';
 export type Weather = 'crisp' | 'clear' | 'hazy' | 'partly' | 'overcast' | 'tulefog';
+export type MoonPref = 'full' | 'quarter' | 'new' | 'actual';
+
+export const MOONS: Record<MoonPref, { label: string }> = {
+  full: { label: 'Full Moon' },
+  quarter: { label: 'Half Moon' },
+  new: { label: 'New Moon (Milky Way)' },
+  actual: { label: 'Real Calendar' },
+};
 
 export const SEASONS: Record<Season, { label: string; month: number; day: number; blurb: string }> = {
   winter: { label: 'Winter', month: 1, day: 14, blurb: 'Green hills, flooded rice, snow geese by the tens of thousands' },
@@ -104,8 +112,29 @@ export class Environment {
     return SEASONS[this.season].day;
   }
 
+  /** Preferred lunar phase; shifts the astronomical date up to ±15 days. */
+  moon: MoonPref = 'full';
+  private dayShift = 0;
+
   date(hours = this.hours) {
-    return pacificDate(this.year, this.month, this.day, hours);
+    return pacificDate(this.year, this.month, this.day + this.dayShift, hours);
+  }
+
+  private chooseMoonDay() {
+    this.dayShift = 0;
+    if (this.moon === 'actual') return;
+    const target = this.moon === 'full' ? 1 : this.moon === 'quarter' ? 0.5 : 0;
+    let best = Infinity;
+    for (let d = -15; d <= 15; d++) {
+      const jd = julianDate(pacificDate(this.year, this.month, this.day + d, 23));
+      const ph = moonPhase(jd);
+      // Prefer a waxing quarter so the moon is up in the evening.
+      const score = Math.abs(ph.illum - target) + (this.moon === 'quarter' && !ph.waxing ? 0.3 : 0);
+      if (score < best) {
+        best = score;
+        this.dayShift = d;
+      }
+    }
   }
 
   sunDirAt(hours: number, out = new THREE.Vector3()) {
@@ -152,6 +181,7 @@ export class Environment {
   }
 
   setPreset(p: TimePreset) {
+    this.chooseMoonDay();
     this.time = p;
     this.hours = this.hoursForPreset(p);
   }
