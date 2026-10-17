@@ -18,6 +18,7 @@ out vec3 vWorld;
 out vec3 vNormal;
 out vec3 vLocal;
 out vec3 vScale;
+out vec3 vLocalN;
 flat out float vPart;
 flat out vec4 vWall;
 flat out vec4 vRoof;
@@ -35,6 +36,7 @@ void main() {
   vNormal = n;
   vLocal = position;
   vScale = aT1.xyz;
+  vLocalN = normal;
   vPart = aPart;
   vWall = aWall;
   vRoof = aRoof;
@@ -57,6 +59,7 @@ in vec3 vWorld;
 in vec3 vNormal;
 in vec3 vLocal;
 in vec3 vScale;
+in vec3 vLocalN;
 flat in float vPart;
 flat in vec4 vWall;
 flat in vec4 vRoof;
@@ -74,7 +77,8 @@ void main() {
 #endif
   vec3 n = normalize(vNormal);
   if (!gl_FrontFacing) n = -n;
-  vec3 albedo = vPart > 0.5 ? vRoof.rgb : vWall.rgb;
+  // Palette colours are display-referred; real stucco and paint sit near 0.4.
+  vec3 albedo = (vPart > 0.5 ? vRoof.rgb : vWall.rgb) * 0.55;
   float rough = 0.85;
   vec3 emit = vec3(0.0);
   float kind = vKind;
@@ -90,17 +94,21 @@ void main() {
   } else if (abs(n.y) < 0.5 && (kind < 0.5 || kind > 3.5)) {
     // Facade with windows: cells ~3 m wide, one storey high.
     vec3 sc = vLocal * vScale;
-    float u = abs(n.x) > abs(n.z) ? sc.z : sc.x;
+    float u = abs(vLocalN.x) > abs(vLocalN.z) ? sc.z : sc.x;
     vec2 cell = vec2(u / 3.2, sc.y / 2.9);
     vec2 f = fract(cell);
     vec2 id = floor(cell);
-    bool win = f.x > 0.3 && f.x < 0.72 && f.y > 0.35 && f.y < 0.8 && sc.y < vScale.y * 0.6;
+    bool win = f.x > 0.3 && f.x < 0.72 && f.y > 0.35 && f.y < 0.8 && (id.y + 0.85) * 2.9 < vScale.y * 0.6;
     if (win) {
       albedo = vec3(0.04, 0.05, 0.06);
-      rough = 0.15;
-      float lit = step(0.45, hash12(id + vRoof.a * 91.0)) * vWall.a;
-      vec3 warm = mix(vec3(1.0, 0.62, 0.3), vec3(0.95, 0.85, 0.7), hash12(id + 3.7));
-      emit = warm * lit * uNight * 0.35;
+      rough = 0.3;
+      float lit = step(0.68, hash12(id + vRoof.a * 91.0)) * vWall.a;
+      vec3 warm = mix(vec3(1.0, 0.42, 0.12), vec3(0.9, 0.62, 0.36), hash12(id + 3.7));
+      // TV flicker in a few rooms.
+      float tv = step(0.93, hash12(id + 7.1));
+      warm = mix(warm, vec3(0.45, 0.6, 1.0) * (0.6 + 0.4 * sin(uTime * 9.0 + id.x * 4.0)), tv);
+      emit = warm * warm * lit * uNight * 0.5 * uInvExposure;
+      if (lit > 0.5) albedo = vec3(0.0);
     }
   } else if (kind > 1.5 && kind < 2.5) {
     // Silo: ribbed galvanised steel.
