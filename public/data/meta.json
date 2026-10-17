@@ -53,5 +53,27 @@
       "min": -2,
       "max": 3457.8922665628843
     }
+  },
+  "landcover": {
+    "size": 50000,
+    "res": 2048,
+    "classes": {
+      "OTHER": 0,
+      "RICE": 1,
+      "WALNUT": 2,
+      "ALMOND": 3,
+      "FRUIT": 4,
+      "GRASS": 5,
+      "WETLAND": 6,
+      "WATER": 7,
+      "URBAN_OPEN": 8,
+      "URBAN_LOW": 9,
+      "URBAN_MED": 10,
+      "URBAN_HIGH": 11,
+      "WOODLAND": 12,
+      "ROWCROP": 13,
+      "FALLOW": 14,
+      "HAY": 15
+    }
   }
 }
