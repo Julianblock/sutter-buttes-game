@@ -3,6 +3,7 @@ import { G } from '../render/globals';
 import { propFragment, propVertex } from '../render/shaders/propShader';
 import type { ShadowMap } from '../render/shadows';
 import type { Heightfield } from './heightfield';
+import { merge, StrutBuilder, withPart } from './geom';
 import { LC, type OsmData } from './meta';
 
 export const KIND = { HOUSE: 0, SHED: 1, SILO: 2, TOWER: 3, HUT: 4 } as const;
@@ -10,33 +11,6 @@ export const KIND = { HOUSE: 0, SHED: 1, SILO: 2, TOWER: 3, HUT: 4 } as const;
 function hash(n: number) {
   const s = Math.sin(n * 91.345 + 47.853) * 43758.5453;
   return s - Math.floor(s);
-}
-
-export function withPart(g: THREE.BufferGeometry, part: number) {
-  const ng = g.index ? g.toNonIndexed() : g;
-  ng.setAttribute('aPart', new THREE.Float32BufferAttribute(new Array(ng.attributes.position.count).fill(part), 1));
-  ng.deleteAttribute('uv');
-  return ng;
-}
-
-export function merge(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  let count = 0;
-  for (const g of list) count += g.attributes.position.count;
-  const pos = new Float32Array(count * 3);
-  const nrm = new Float32Array(count * 3);
-  const part = new Float32Array(count);
-  let o = 0;
-  for (const g of list) {
-    pos.set(g.attributes.position.array as Float32Array, o * 3);
-    nrm.set(g.attributes.normal.array as Float32Array, o * 3);
-    part.set(g.attributes.aPart.array as Float32Array, o);
-    o += g.attributes.position.count;
-  }
-  const m = new THREE.BufferGeometry();
-  m.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  m.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
-  m.setAttribute('aPart', new THREE.BufferAttribute(part, 1));
-  return m;
 }
 
 /** Unit house: walls to 0.62, gable roof to 1, ridge along x. */
@@ -81,20 +55,13 @@ function siloGeometry(): THREE.BufferGeometry {
 
 /** Triangular lattice broadcast tower, unit height, unit base width. */
 function towerGeometry(): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
+  const sb = new StrutBuilder();
   const leg = (h: number) => 0.5 * (1 - 0.7 * h);
   const corner = (k: number, h: number) => {
     const a = (k / 3) * Math.PI * 2;
     return new THREE.Vector3(Math.cos(a) * leg(h), h, Math.sin(a) * leg(h));
   };
-  const strut = (a: THREE.Vector3, b: THREE.Vector3, r: number) => {
-    const d = b.clone().sub(a);
-    const len = d.length();
-    const g = new THREE.CylinderGeometry(r, r, len, 3, 1, true).translate(0, len / 2, 0);
-    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
-    g.applyMatrix4(new THREE.Matrix4().compose(a, q, new THREE.Vector3(1, 1, 1)));
-    parts.push(withPart(g, 2));
-  };
+  const strut = (a: THREE.Vector3, b: THREE.Vector3, r: number) => sb.strut(a, b, r);
   const seg = 14;
   for (let i = 0; i < seg; i++) {
     const h0 = i / seg;
@@ -105,7 +72,7 @@ function towerGeometry(): THREE.BufferGeometry {
       strut(corner(k, h1), corner((k + 1) % 3, h1), 0.008);
     }
   }
-  return merge(parts);
+  return sb.build();
 }
 
 const PROP_TILE = 2000;

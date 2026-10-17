@@ -4,7 +4,7 @@ import { LightPoints } from '../render/lightPoints';
 import { propFragment, propVertex } from '../render/shaders/propShader';
 import type { Heightfield } from '../world/heightfield';
 import type { OsmData } from '../world/meta';
-import { merge, withPart } from '../world/props';
+import { merge, withPart } from '../world/geom';
 
 /** Free-flow speeds (m/s) and traffic density (vehicles per km) by road class. */
 const ROAD: Record<string, { speed: number; density: number; rank: number }> = {
