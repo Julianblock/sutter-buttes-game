@@ -16,6 +16,7 @@ export interface WorldMeta {
   regions: Record<RegionName, RegionSpec>;
   heightEncoding: Record<RegionName, HeightEncoding>;
   landcover: { size: number; res: number; classes: Record<string, number> };
+  trees?: { size: number; count: number };
 }
 
 export const LC = {

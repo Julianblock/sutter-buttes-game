@@ -10,8 +10,11 @@ import { buildMosaic } from './lib/tiles.mjs';
 import { buildLandcover, LC } from './lib/landcover.mjs';
 import { buildOsm } from './lib/osm.mjs';
 import { canopyMask, horizonAO, readHeight } from './lib/derived.mjs';
+import { detectTrees } from './lib/trees.mjs';
 
 const OUT = path.resolve('public/data');
+// Square zone around the Buttes where individual trees are detected from z16 imagery.
+const TREE_ZONE = 16000;
 
 export const REGIONS = {
   inner: { size: 22000, heightRes: 2048, heightZoom: 14, imageRes: 4096, imageZoom: 15 },
@@ -149,6 +152,34 @@ const steps = {
     await sharp(Buffer.from(mask), { raw: { width: res, height: res, channels: 1 } })
       .png({ compressionLevel: 9 })
       .toFile(path.join(OUT, 'canopy_inner.png'));
+  },
+  async trees() {
+    console.log('trees/buttes');
+    const lc = await sharp(path.join(OUT, 'landcover.png')).raw().toBuffer({ resolveWithObject: true });
+    const lcRes = lc.info.width;
+    const ok = new Set([LC.GRASS, LC.WOODLAND, LC.WETLAND, LC.HAY, LC.OTHER, LC.FALLOW, LC.URBAN_OPEN]);
+    const size = TREE_ZONE;
+    const trees = await detectTrees({
+      size,
+      cell: 2.5,
+      zoom: 16,
+      allow: (x, z) => {
+        const li = Math.floor((x / REGIONS.mid.size + 0.5) * lcRes);
+        const lj = Math.floor((z / REGIONS.mid.size + 0.5) * lcRes);
+        return ok.has(lc.data[(lj * lcRes + li) * lc.info.channels]);
+      },
+    });
+    // 6 bytes per tree: uint16 x, uint16 z (over the zone), uint8 radius*20, uint8 darkness*255.
+    const buf = Buffer.alloc(trees.length * 6);
+    trees.forEach(([x, z, r, d], k) => {
+      buf.writeUInt16LE(Math.round(((x / size) + 0.5) * 65535), k * 6);
+      buf.writeUInt16LE(Math.round(((z / size) + 0.5) * 65535), k * 6 + 2);
+      buf.writeUInt8(Math.min(255, Math.round(r * 20)), k * 6 + 4);
+      buf.writeUInt8(Math.min(255, Math.round(d * 255)), k * 6 + 5);
+    });
+    await fs.writeFile(path.join(OUT, 'trees.bin'), buf);
+    console.log(`  ${trees.length} trees, ${(buf.length / 1024).toFixed(0)} KB`);
+    await writeMeta({ trees: { size, count: trees.length } });
   },
   async osm() {
     console.log('osm/mid');
