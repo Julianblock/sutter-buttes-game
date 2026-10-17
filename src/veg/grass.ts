@@ -4,14 +4,15 @@ import { grassFragment, grassVertex } from '../render/shaders/grassShader';
 import { seasonUniforms } from '../render/terrain';
 import type { Heightfield } from '../world/heightfield';
 
-const BLADES = 6;
+const BLADES = 7;
 
 function clumpGeometry(): THREE.InstancedBufferGeometry {
   // Tapered blade: three segments narrowing to a point.
   const rows = [
     [0, 1],
-    [0.4, 0.85],
-    [0.75, 0.55],
+    [0.3, 0.9],
+    [0.58, 0.72],
+    [0.82, 0.45],
   ];
   const pos: number[] = [];
   const blade: number[] = [];
@@ -39,7 +40,9 @@ function clumpGeometry(): THREE.InstancedBufferGeometry {
 }
 
 /** Sward height by month (m): green-up after the rains, tall wild oats in spring, cured through summer. */
-const SWARD = [0.22, 0.3, 0.45, 0.6, 0.65, 0.6, 0.55, 0.5, 0.48, 0.42, 0.18, 0.18];
+const SWARD = [0.18, 0.24, 0.34, 0.44, 0.52, 0.5, 0.46, 0.42, 0.4, 0.36, 0.15, 0.15];
+/** Share of annual grasses carrying seed heads by month (wild oats, brome). */
+const SEED = [0, 0, 0, 0.15, 0.7, 1, 1, 0.9, 0.7, 0.4, 0.1, 0];
 
 interface Ring {
   mesh: THREE.Mesh;
@@ -74,8 +77,8 @@ export class Grass {
     };
     // Inner: fine clumps to ~55 m. Outer: coarse, wider-bladed clumps to ~120 m.
     const specs = [
-      { spacing: 0.42, n: 260, fadeIn: [-1, 0], fadeOut: [40, 54] },
-      { spacing: 1.2, n: 200, fadeIn: [40, 54], fadeOut: [85, 118] },
+      { spacing: 0.36, n: 280, fadeIn: [-1, 0], fadeOut: [38, 50] },
+      { spacing: 1.1, n: 220, fadeIn: [38, 50], fadeOut: [90, 120] },
     ];
     for (const s of specs) {
       const mat = new THREE.ShaderMaterial({
@@ -91,6 +94,7 @@ export class Grass {
           uFadeIn: { value: new THREE.Vector2(...s.fadeIn) },
           uFadeOut: { value: new THREE.Vector2(...s.fadeOut) },
           uGrassH: { value: 0.5 },
+          uSeedHead: { value: 0 },
         },
         side: THREE.DoubleSide,
       });
@@ -109,10 +113,12 @@ export class Grass {
     const m = ((month % 12) + 12) % 12;
     const i = Math.floor(m);
     const h = THREE.MathUtils.lerp(SWARD[i], SWARD[(i + 1) % 12], m - i);
+    const seed = THREE.MathUtils.lerp(SEED[i], SEED[(i + 1) % 12], m - i);
     for (const r of this.rings) {
       r.mesh.visible = on;
       r.mat.uniforms.uOrigin.value.set(Math.floor(cam.x / r.spacing) * r.spacing, Math.floor(cam.z / r.spacing) * r.spacing);
       r.mat.uniforms.uGrassH.value = h;
+      r.mat.uniforms.uSeedHead.value = seed;
     }
   }
 }
