@@ -8,6 +8,7 @@ import sharp from 'sharp';
 import { CENTER } from './lib/geo.mjs';
 import { buildMosaic } from './lib/tiles.mjs';
 import { buildLandcover, LC } from './lib/landcover.mjs';
+import { buildOsm } from './lib/osm.mjs';
 
 const OUT = path.resolve('public/data');
 
@@ -113,6 +114,12 @@ const steps = {
       .png({ compressionLevel: 9 })
       .toFile(path.join(OUT, 'landcover.png'));
     await writeMeta({ landcover: { size, res, classes: LC } });
+  },
+  async osm() {
+    console.log('osm/mid');
+    const osm = await buildOsm(REGIONS.mid.size, path.resolve('.cache/osm'));
+    for (const [k, v] of Object.entries(osm)) console.log(`  ${k.padEnd(10)} ${v.length}`);
+    await fs.writeFile(path.join(OUT, 'osm.json'), JSON.stringify(osm));
   },
 };
 
