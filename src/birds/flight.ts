@@ -90,6 +90,18 @@ export class FlightModel {
     this.quaternion.setFromEuler(this.euler);
   }
 
+  /** Animates wings only (menu preview): gentle flapping bursts between glides. */
+  animateOnly(dt: number, t: number) {
+    this.speed = this.species.flight.cruise;
+    this.state = 'flying';
+    const burst = Math.sin(t * 0.7) > 0.35 ? 1 : 0;
+    this.flapAmount = approach(this.flapAmount, burst, 4, dt);
+    const inp = emptyInput();
+    this.updatePose(dt, inp);
+    this.euler.set(-0.04, this.psi, 0);
+    this.quaternion.setFromEuler(this.euler);
+  }
+
   private updateFlying(dt: number, inp: FlightInput) {
     const f = this.species.flight;
     const V = Math.max(this.speed, 0.5);

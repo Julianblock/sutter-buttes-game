@@ -48,6 +48,13 @@ export class ChaseCamera {
     );
   }
 
+  /** Continue smoothly from wherever the camera currently is. */
+  snapFrom(cam: THREE.Camera, look: THREE.Vector3) {
+    this.pos.copy(cam.position);
+    this.look.copy(look);
+    this.init = true;
+  }
+
   cycle() {
     this.mode = CAMERA_MODES[(CAMERA_MODES.indexOf(this.mode) + 1) % CAMERA_MODES.length];
     this.cineTimer = 0;
