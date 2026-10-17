@@ -393,6 +393,12 @@ class Population {
   get count() {
     return this.geo.instanceCount;
   }
+
+  nearest(p: THREE.Vector3) {
+    let best = Infinity;
+    for (const a of this.animals) if (a.alive) best = Math.min(best, Math.hypot(a.x - p.x, a.y - p.y, a.z - p.z));
+    return best;
+  }
 }
 
 /** Cattle herds, black-tailed deer, wild turkeys and coyotes living around the player. */
@@ -427,6 +433,10 @@ export class Wildlife {
   update(dt: number, cam: THREE.Vector3, bird: THREE.Vector3) {
     dt = Math.min(dt, 0.1);
     for (const p of this.pops) p.update(dt, this.hf, cam, bird);
+  }
+
+  nearest(p: THREE.Vector3, id: string) {
+    return this.pops.find((q) => q.def.id === id)?.nearest(p) ?? Infinity;
   }
 
   counts() {
