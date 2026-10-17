@@ -192,6 +192,20 @@ export class Traffic {
     return this.cars.length;
   }
 
+  /** Nearest vehicle to p: distance and speed. */
+  nearest(p: THREE.Vector3) {
+    let d = Infinity;
+    let v = 0;
+    for (const c of this.cars) {
+      const dd = Math.hypot(c.x - p.x, c.y - p.y, c.z - p.z);
+      if (dd < d) {
+        d = dd;
+        v = c.v;
+      }
+    }
+    return { d, v };
+  }
+
   private buildGraph(osm: OsmData, radius: number) {
     const nodeId = new Map<string, number>();
     const node = (x: number, z: number) => {
