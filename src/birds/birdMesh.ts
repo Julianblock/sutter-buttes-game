@@ -246,8 +246,8 @@ export class BirdModel {
     for (const sideSign of [-1, 1]) {
       for (const top of [true, false]) {
         const part = top ? PART.WING_TOP : PART.WING_BOTTOM;
-        const NS = 26;
-        const NC = 7;
+        const NS = 28;
+        const NC = 12;
         b.grid(
           NS,
           NC,
@@ -485,8 +485,10 @@ export class BirdModel {
       } else if (k === 3) {
         // Swing legs down from the hip for landing.
         const ang = p.legsDown * (sh.legs === 'trailing' ? 1.2 : 1.45);
-        const dy = y - this.legPivot.y;
-        const dz = z - this.legPivot.z;
+        // Tucked raptor feet retract into the belly feathers until lowered.
+        const ext = sh.legs === 'trailing' ? 1 : 0.15 + 0.85 * p.legsDown;
+        const dy = (y - this.legPivot.y) * ext;
+        const dz = (z - this.legPivot.z) * ext;
         const c = Math.cos(ang);
         const sn = Math.sin(ang);
         y = this.legPivot.y + dy * c + dz * sn;
