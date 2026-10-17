@@ -38,7 +38,7 @@ void main() {
     n = rotX(n, a);
   } else if (limb == 5) {
     // Head and neck: lowered to the grass when grazing, slight bob when walking.
-    float a = aT1.w * 0.95 - sin(phase * 2.0) * 0.05 * min(gait, 1.0);
+    float a = aT1.w * 1.35 - sin(phase * 2.0) * 0.05 * min(gait, 1.0);
     p = rotX(p - pivot, a) + pivot;
     n = rotX(n, a);
   } else if (limb == 6) {

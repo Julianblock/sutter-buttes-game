@@ -99,7 +99,8 @@ function quadruped(s: QuadSpec): THREE.BufferGeometry {
   const half = s.len / 2;
   b.ellipsoid([0, bodyY, 0], [s.bodyR[0], s.bodyR[1], half], s.coat, BODY, [0, 0], 0, 12);
   b.ellipsoid([0, bodyY - s.bodyR[1] * 0.45, 0.05], [s.bodyR[0] * 0.85, s.bodyR[1] * 0.6, half * 0.8], s.belly);
-  b.ellipsoid([0, bodyY + 0.02, half * 0.62], [s.bodyR[0] * 1.02, s.bodyR[1] * 1.05, half * 0.42], s.coat);
+  b.ellipsoid([0, bodyY - s.bodyR[1] * 0.05, half * 0.55], [s.bodyR[0] * 1.05, s.bodyR[1] * 1.15, half * 0.45], s.coat);
+  b.ellipsoid([0, bodyY + s.bodyR[1] * 0.05, -half * 0.6], [s.bodyR[0] * 1.02, s.bodyR[1] * 1.05, half * 0.42], s.coat);
   if (s.rump) b.ellipsoid([0, bodyY + s.bodyR[1] * 0.1, -half * 0.92], [s.bodyR[0] * 0.7, s.bodyR[1] * 0.7, half * 0.12], s.rump);
   // Legs: hip pivot, slight knee offset, narrowing to the hoof/paw.
   const hipZ = [half * 0.62, half * 0.62, -half * 0.68, -half * 0.68];
@@ -109,6 +110,9 @@ function quadruped(s: QuadSpec): THREE.BufferGeometry {
     const x = side[i] * s.bodyR[0] * 0.55;
     const z = hipZ[i];
     const knee = V(x, s.hipY * 0.48, z + (i < 2 ? 0.02 : -0.05) * s.len);
+    // Shoulder / haunch muscle so legs don't read as sticks.
+    const hind = i >= 2;
+    b.ellipsoid([x * 1.05, s.hipY + s.bodyR[1] * 0.05, z + (hind ? -0.02 : 0.03) * s.len], [s.bodyR[0] * 0.5, s.hipY * (hind ? 0.36 : 0.3), s.len * (hind ? 0.13 : 0.1)], s.coat, i + 1, [s.hipY, z], phase[i], 8);
     b.limbSeg(V(x, s.hipY + s.bodyR[1] * 0.2, z), knee, s.legR * 1.6, s.legR, s.coat, i + 1, [s.hipY, z], phase[i]);
     b.limbSeg(knee, V(x, 0, z + (i < 2 ? 0.0 : -0.02) * s.len), s.legR, s.legR * 0.7, s.legs, i + 1, [s.hipY, z], phase[i]);
   }
@@ -196,7 +200,7 @@ const SPECIES: SpeciesDef[] = [
     id: 'deer',
     // Columbian black-tailed deer.
     geo: () =>
-      quadruped({ len: 1.25, hipY: 0.78, bodyR: [0.17, 0.22], legR: 0.03, neckLen: 0.28, neckUp: 0.3, headLen: 0.3, headR: 0.08, tailLen: 0.18, tailR: 0.04, tailDown: 0.1, coat: '#7a6450', belly: '#c9b9a2', legs: '#6b5848', face: '#6e5a48', tail: '#1c1612', ears: 0.11, rump: '#d8cbb6' }),
+      quadruped({ len: 1.2, hipY: 0.74, bodyR: [0.18, 0.25], legR: 0.032, neckLen: 0.22, neckUp: 0.38, headLen: 0.3, headR: 0.08, tailLen: 0.18, tailR: 0.04, tailDown: 0.1, coat: '#7a6450', belly: '#c9b9a2', legs: '#6b5848', face: '#6e5a48', tail: '#1c1612', ears: 0.11, rump: '#d8cbb6' }),
     cap: 60,
     radius: 1300,
     group: [1, 5],
