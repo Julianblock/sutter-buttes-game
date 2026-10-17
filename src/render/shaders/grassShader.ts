@@ -95,9 +95,11 @@ void main() {
   float coarse = step(1.0, uSpacing);
 
   // Plant type: broad-leaved forb, wild oat in seed, or plain grass blade.
-  bool forb = rb3 < 0.11;
-  bool oat = !forb && rb3 < 0.11 + 0.22 * uSeedHead;
   float drift = smoothstep(0.5, 0.72, fbm(root / 45.0 + 3.1, 3));
+  // Wildflower drifts: inside a drift most plants are in bloom.
+  float forbShare = 0.1 + 0.45 * uVeg.z * drift;
+  bool forb = rb3 < forbShare;
+  bool oat = !forb && rb3 < forbShare + 0.22 * uSeedHead;
   float springBloom = uVeg.z * (0.25 + drift);
   float thistle = uSeedHead * (1.0 - green) * smoothstep(0.4, 0.7, vnoise(root / 30.0 + 11.0));
   bool flower = forb && (rb2 < springBloom || rb2 < thistle * 0.8);
