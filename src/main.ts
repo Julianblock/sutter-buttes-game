@@ -21,6 +21,8 @@ import { Trees } from './veg/trees';
 import { ShadowMap } from './render/shadows';
 import { Props } from './world/props';
 import { LightPoints } from './render/lightPoints';
+import { Traffic } from './life/traffic';
+import { Roads } from './world/roads';
 import { createBirdShadowMaterial } from './birds/birdShader';
 import { LoadingScreen } from './ui/loading';
 import { Menu } from './ui/menu';
@@ -83,6 +85,10 @@ async function boot() {
   const props = new Props(world.osm, heightfield);
   const lights = new LightPoints(props.lights);
   engine.scene.add(props.group, lights.points);
+  const roads = new Roads(world.osm, heightfield);
+  engine.scene.add(roads.group);
+  const traffic = new Traffic(world.osm, heightfield);
+  engine.scene.add(traffic.group);
 
   const air = new AirField(heightfield);
   const species = speciesById(settings.bird) ?? SPECIES[0];
@@ -183,6 +189,16 @@ async function boot() {
     }
   });
 
+  /** Debug: aim the free camera at a world point. */
+  (window as unknown as { freeLook: unknown }).freeLook = (x: number, y: number, z: number, tx: number, ty: number, tz: number) => {
+    cam.position.set(x, y, z);
+    const dx = tx - x;
+    const dy = ty - y;
+    const dz = tz - z;
+    yaw = Math.atan2(-dx, -dz);
+    pitch = Math.atan2(dy, Math.hypot(dx, dz));
+  };
+
   function freeCam(dt: number) {
     const keys = controls.keys;
     const speed = keys.has('ShiftLeft') ? 800 : 120;
@@ -279,6 +295,8 @@ async function boot() {
     terrain.update(cam);
     trees.update(cam);
     lights.resize(cam, window.innerHeight * engine.pixelRatio);
+    traffic.lights.resize(cam, window.innerHeight * engine.pixelRatio);
+    traffic.update(dt, cam.position, G.uNight.value);
     shadow.update(engine.renderer, free ? cam.position : player.object.position);
     G.uInvExposure.value = 1 / env.exposure;
     sky.update(cam, env.exposure);
@@ -290,7 +308,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights,
+    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     setMode,
   });
