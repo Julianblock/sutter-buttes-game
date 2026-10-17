@@ -13,9 +13,16 @@ out vec3 vNormal;
 out vec3 vLocal;
 out vec2 vUv;
 flat out int vPart;
+#ifdef SHADOW_PASS
+uniform mat4 uShadowMatrix;
+out float vShadowZ;
+#endif
 void main() {
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vWorld = wp.xyz;
+#ifdef SHADOW_PASS
+  vShadowZ = (uShadowMatrix * wp).z;
+#endif
   vNormal = normalize(mat3(modelMatrix) * normal);
   vLocal = position;
   vUv = aUv;
@@ -34,6 +41,9 @@ in vec3 vNormal;
 in vec3 vLocal;
 in vec2 vUv;
 flat in int vPart;
+#ifdef SHADOW_PASS
+in float vShadowZ;
+#endif
 out vec4 outColor;
 
 uniform vec3 cHead, cThroat, cBreast, cBelly, cBack, cCoverts, cSecondaries, cPrimaries;
@@ -60,6 +70,10 @@ float featherFringe(vec2 p, float scale) {
 
 void main() {
   #include <logdepthbuf_fragment>
+#ifdef SHADOW_PASS
+  outColor = vec4(vShadowZ, 0.0, 0.0, 1.0);
+  return;
+#endif
   vec3 n = normalize(vNormal);
   if (!gl_FrontFacing) n = -n;
   vec3 V = normalize(uCamPos - vWorld);
@@ -238,6 +252,18 @@ const COLOR_KEYS = [
   ['cEye', 'eye'],
   ['cSkin', 'skin'],
 ] as const;
+
+/** Light-space depth variant used by the shadow map. */
+export function createBirdShadowMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    vertexShader: vertex,
+    fragmentShader: fragment,
+    uniforms: { ...createBirdMaterial().uniforms },
+    defines: { SHADOW_PASS: '' },
+    side: THREE.DoubleSide,
+  });
+}
 
 export function createBirdMaterial(): THREE.ShaderMaterial {
   const uniforms: Record<string, THREE.IUniform> = {

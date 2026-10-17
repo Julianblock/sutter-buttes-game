@@ -14,6 +14,7 @@ export class Player {
   flight: FlightModel;
   species: Species;
   palette: Palette;
+  shadowCaster?: THREE.Mesh;
 
   constructor(species: Species, palette: Palette, hf: Heightfield, air: AirField) {
     this.species = species;
@@ -31,6 +32,7 @@ export class Player {
     this.palette = palette;
     this.model = new BirdModel(species.shape, this.material);
     this.object.add(this.model.mesh);
+    if (this.shadowCaster) this.shadowCaster.geometry = this.model.geometry;
     this.flight.setSpecies(species);
     applyPalette(this.material, palette, this.model.headT, this.model.fingerStart);
   }
