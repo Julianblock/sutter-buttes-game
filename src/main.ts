@@ -280,6 +280,7 @@ async function boot() {
     trees.update(cam);
     lights.resize(cam, window.innerHeight * engine.pixelRatio);
     shadow.update(engine.renderer, free ? cam.position : player.object.position);
+    G.uInvExposure.value = 1 / env.exposure;
     sky.update(cam, env.exposure);
     engine.render(env.exposure, G.uNight.value, G.uTime.value);
     schedule(frame);
