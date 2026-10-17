@@ -77,8 +77,8 @@ export class Grass {
     };
     // Inner: fine clumps to ~55 m. Outer: coarse, wider-bladed clumps to ~120 m.
     const specs = [
-      { spacing: 0.36, n: 280, fadeIn: [-1, 0], fadeOut: [38, 50] },
-      { spacing: 1.1, n: 220, fadeIn: [38, 50], fadeOut: [90, 120] },
+      { spacing: 0.38, n: 250, fadeIn: [-1, 0], fadeOut: [35, 47] },
+      { spacing: 1.25, n: 190, fadeIn: [35, 47], fadeOut: [88, 118] },
     ];
     for (const s of specs) {
       const mat = new THREE.ShaderMaterial({

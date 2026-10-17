@@ -68,7 +68,7 @@ void main() {
   vec3 alb = photo * 0.62;
   float l = luma(alb);
   float canopy = smoothstep(0.07, 0.04, l);
-  vec3 nrm = terrainNormal(centre, 4.0);
+  vec3 nrm = normalize(vec3(hC - terrainHeight(centre + vec2(4.0, 0.0)), 4.0, hC - terrainHeight(centre + vec2(0.0, 4.0))));
   float rocky = smoothstep(0.35, 0.55, 1.0 - nrm.y);
   float density = natural * (1.0 - canopy) * (1.0 - rocky) * (1.0 - mA.r) * (1.0 - mA.a) * (1.0 - mA.g);
   float patchy = vnoise(centre / 7.0) * 0.6 + vnoise(centre / 1.9) * 0.4;
