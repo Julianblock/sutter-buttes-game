@@ -65,7 +65,9 @@ vec3 skyAmbient(vec3 n, float ao) {
   vec3 hz = texture(uAmbientLUT, vec2(0.75, 0.5)).rgb * PI;
   float t = n.y * 0.5 + 0.5;
   vec3 sky = mix(hz * 0.55, up, t * t);
-  vec3 bounce = (up * 0.18) * vec3(1.0, 0.85, 0.62) * (1.0 - t);
+  // Light bounced off sunlit ground (albedo ~0.2) onto surfaces that face it.
+  vec3 groundIrr = up + SUN_ILLUMINANCE * transmittanceAt(0.0, uSunDir) * max(uSunDir.y, 0.0);
+  vec3 bounce = groundIrr * 0.2 * vec3(1.0, 0.86, 0.66) * (1.0 - t);
   // Starlight + airglow floor so moonless nights are not pitch black.
   vec3 night = vec3(0.0009, 0.0012, 0.002) * uNight;
   return (sky + bounce + night) * ao;
