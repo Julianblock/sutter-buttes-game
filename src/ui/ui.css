@@ -456,6 +456,7 @@ kbd {
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   transition: opacity 0.3s;
+  pointer-events: auto;
 }
 .help.hidden {
   opacity: 0;
