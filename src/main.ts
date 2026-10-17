@@ -10,6 +10,11 @@ import { loadWorld } from './world/loader';
 import { Heightfield } from './world/heightfield';
 import { createWorldTextures } from './world/textures';
 import { Environment, type Season, type TimePreset, type Weather } from './world/environment';
+import { AirField } from './birds/air';
+import { Player } from './birds/player';
+import { ChaseCamera } from './birds/camera';
+import { Controls } from './birds/input';
+import { SPECIES, speciesById } from './birds/species';
 
 async function boot() {
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -37,27 +42,36 @@ async function boot() {
   const sky = new Sky();
   engine.scene.add(sky.mesh, terrain.mesh);
 
-  // Debug free camera.
+  const air = new AirField(heightfield);
+  const species = speciesById(params.get('bird') || 'redtail') ?? SPECIES[0];
+  const palette = species.palettes[Number(params.get('palette') || 0)] ?? species.palettes[0];
+  const player = new Player(species, palette, heightfield, air);
+  const sp = (params.get('spawn') || '1800,620,3600,3.3').split(',').map(Number);
+  player.flight.spawn(sp[0], sp[1], sp[2], sp[3]);
+  engine.scene.add(player.object);
+
   const cam = engine.camera;
+  const controls = new Controls();
+  const chase = new ChaseCamera(cam, heightfield, canvas);
+  const free = params.has('free');
+  const inspect = params.has('inspect');
+  let inspectAngle = Number(params.get('inspect') || 0.8);
+  let inspectHeight = 0.35;
+
+  // Debug free camera (?free).
   const c = (params.get('cam') || '0,900,9000,0,-0.08').split(',').map(Number);
-  cam.position.set(c[0], c[1], c[2]);
   let yaw = c[3];
   let pitch = c[4];
-  const keys = new Set<string>();
-  addEventListener('keydown', (e) => keys.add(e.code));
-  addEventListener('keyup', (e) => keys.delete(e.code));
+  if (free) cam.position.set(c[0], c[1], c[2]);
   canvas.addEventListener('mousemove', (e) => {
-    if (e.buttons & 1) {
+    if (free && e.buttons & 1) {
       yaw -= e.movementX * 0.003;
       pitch = Math.max(-1.5, Math.min(1.5, pitch - e.movementY * 0.003));
     }
   });
 
-  const clock = new THREE.Clock();
-  let lastMie = -1;
-  function frame() {
-    const dt = Math.min(clock.getDelta(), 0.1);
-    G.uTime.value += dt;
+  function freeCam(dt: number) {
+    const keys = controls.keys;
     const speed = keys.has('ShiftLeft') ? 800 : 120;
     const fwd = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
     const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
@@ -70,8 +84,42 @@ async function boot() {
     cam.position.y = Math.max(cam.position.y, heightfield.height(cam.position.x, cam.position.z) + 2);
     cam.rotation.set(pitch, yaw, 0, 'YXZ');
     cam.updateMatrixWorld();
+  }
 
+  const clock = new THREE.Clock();
+  let lastMie = -1;
+  function frame() {
+    const dt = Math.min(clock.getDelta(), 0.1);
+    G.uTime.value += dt;
     env.apply(dt);
+
+    air.time += dt;
+    air.sun = Math.max(0, Math.sin(env.sunAltitude * THREE.MathUtils.DEG2RAD) * 1.2) * (1 - 0.6 * G.uCloudCover.value);
+    air.windX = G.uWind.value.x;
+    air.windZ = G.uWind.value.y;
+
+    if (free) {
+      freeCam(dt);
+    } else if (inspect) {
+      // Model viewer: frozen glide pose, camera orbiting the bird.
+      inspectAngle += dt * 0.25;
+      const b = player.flight.pos;
+      player.flight.quaternion.identity();
+      player.sync();
+      const r = player.species.shape.wingspan * 1.6;
+      cam.position.set(b.x + Math.sin(inspectAngle) * r, b.y + r * inspectHeight, b.z + Math.cos(inspectAngle) * r);
+      cam.fov = 45;
+      cam.updateProjectionMatrix();
+      cam.lookAt(b);
+      cam.updateMatrixWorld();
+    } else {
+      const input = controls.update(dt);
+      if (controls.consume('KeyC')) chase.cycle();
+      player.step(dt, input);
+      player.sync();
+      chase.update(dt, player.flight, player.object);
+    }
+
     if (G.uMieScale.value !== lastMie) {
       lastMie = G.uMieScale.value;
       atmosphere.rebuildTransmittance();
@@ -88,7 +136,10 @@ async function boot() {
   // Background/headless tabs throttle rAF; ?timer keeps the loop alive for capture.
   const schedule = params.has('timer') ? (f: () => void) => setTimeout(f, 16) : requestAnimationFrame;
   frame();
-  Object.assign(window, { engine, env, terrain, heightfield, G });
+  Object.assign(window, {
+    engine, env, terrain, heightfield, G, player, chase, air, controls,
+    inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
+  });
 }
 
 boot().catch((err) => {
