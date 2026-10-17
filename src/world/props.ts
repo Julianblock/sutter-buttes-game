@@ -5,6 +5,7 @@ import type { ShadowMap } from '../render/shadows';
 import type { Heightfield } from './heightfield';
 import { merge, StrutBuilder, withPart } from './geom';
 import { LC, type OsmData } from './meta';
+import { latticeGeometry, poleGeometry, PYLON, type Pylon } from './powerLines';
 
 export const KIND = { HOUSE: 0, SHED: 1, SILO: 2, TOWER: 3, HUT: 4 } as const;
 
@@ -95,7 +96,7 @@ export class Props {
   readonly lights: number[] = [];
   private batches: Batch[] = [];
 
-  constructor(osm: OsmData, hf: Heightfield) {
+  constructor(osm: OsmData, hf: Heightfield, pylons: Pylon[] = []) {
     this.material = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
       vertexShader: propVertex,
@@ -107,15 +108,15 @@ export class Props {
     this.shadowMaterial.uniforms = this.material.uniforms;
     this.shadowMaterial.defines = { SHADOW_PASS: '' };
 
-    const geos = [houseGeometry(), shedGeometry(), siloGeometry(), towerGeometry()];
+    const geos = [houseGeometry(), shedGeometry(), siloGeometry(), towerGeometry(), latticeGeometry(), poleGeometry()];
     const data: number[][][] = geos.map(() => []);
     const c = new THREE.Color();
-    const push = (kind: number, x: number, z: number, w: number, h: number, d: number, ang: number, wall: string, roof: string, lit: number, seed: number) => {
+    const push = (kind: number, x: number, z: number, w: number, h: number, d: number, ang: number, wall: string, roof: string, lit: number, seed: number, geo?: number) => {
       const y = hf.height(x, z) - 0.4;
       c.set(wall);
       const wr = [c.r, c.g, c.b];
       c.set(roof);
-      const geoIndex = kind === KIND.HUT ? 0 : kind;
+      const geoIndex = geo ?? (kind === KIND.HUT ? 0 : kind);
       data[geoIndex].push([x, y, z, ang, w, h, d, kind, wr[0], wr[1], wr[2], lit, c.r, c.g, c.b, seed]);
     };
 
@@ -234,6 +235,12 @@ export class Props {
       this.lights.push(m.x, hf.height(m.x, m.z) + h, m.z, 1, 0.08, 0.04, 3.0, 1);
     }
 
+    // Transmission pylons (metres-scale geometry; wall colour tints insulators and wood).
+    for (const t of pylons) {
+      const lattice = t.type === PYLON.LATTICE;
+      push(KIND.TOWER, t.x, t.z, 1, 1, 1, t.ang, lattice ? '#5e6b70' : '#6a5440', '#4e5a5e', 0, 0.5, lattice ? 4 : 5);
+    }
+
     // Split each kind into spatial tiles so the GPU only draws what's in view.
     geos.forEach((base, k) => {
       const byTile = new Map<number, number[][]>();
@@ -257,9 +264,10 @@ export class Props {
           t1.set(r.slice(4, 8), i * 4);
           wall.set(r.slice(8, 12), i * 4);
           roof.set(r.slice(12, 16), i * 4);
-          const e = Math.max(r[4], r[6]);
+          const metres = k >= 4;
+          const e = metres ? 9 : Math.max(r[4], r[6]);
           box.expandByPoint(new THREE.Vector3(r[0] - e, r[1], r[2] - e));
-          box.expandByPoint(new THREE.Vector3(r[0] + e, r[1] + r[5], r[2] + e));
+          box.expandByPoint(new THREE.Vector3(r[0] + e, r[1] + (metres ? 41 : r[5]), r[2] + e));
         });
         g.setAttribute('aT0', new THREE.InstancedBufferAttribute(t0, 4));
         g.setAttribute('aT1', new THREE.InstancedBufferAttribute(t1, 4));
