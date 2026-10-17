@@ -37,7 +37,8 @@ void main() {
   // Sub-pixel lamps keep a 3 px footprint and lose energy with distance
   // instead, flattening the profile so the centre texel isn't missed.
   vCore = clamp(px, 0.0, 1.0);
-  vColor = aColor.rgb * on * mix(0.25 + 0.75 * vCore, 1.0, step(0.5, aBlink));
+  float energy = clamp(px * px * 6.0 + 0.04, 0.0, 1.0);
+  vColor = aColor.rgb * on * mix(energy, max(energy, 0.5), step(0.5, aBlink));
   gl_PointSize = on > 0.001 ? size : 0.0;
   #include <logdepthbuf_vertex>
 }
