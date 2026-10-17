@@ -7,7 +7,7 @@ export function createGradePass(): ShaderPass {
     uniforms: {
       tDiffuse: { value: null },
       uSaturation: { value: 1.08 },
-      uContrast: { value: 1.06 },
+      uContrast: { value: 1.1 },
       uVignette: { value: 0.28 },
       uNight: { value: 0 },
       uTime: { value: 0 },
@@ -51,13 +51,14 @@ export function createGradePass(): ShaderPass {
         c = aces(c * 1.6);
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
         c = mix(vec3(l), c, uSaturation);
-        c = clamp((c - 0.5) * uContrast + 0.5, 0.0, 1.0);
         c += uLift * (1.0 - c);
 
         vec2 q = vUv - 0.5;
         c *= 1.0 - uVignette * dot(q, q) * 1.6;
 
         c = toSRGB(max(c, 0.0));
+        // Contrast in perceptual space so it doesn't crush shadow detail.
+        c = clamp((c - 0.45) * uContrast + 0.45, 0.0, 1.0);
         // Triangular dither to kill banding in skies.
         float n = fract(sin(dot(vUv * 1000.0 + uTime, vec2(12.9898, 78.233))) * 43758.5453);
         float n2 = fract(sin(dot(vUv * 1000.0 + uTime + 0.5, vec2(39.3468, 11.135))) * 24634.6345);
