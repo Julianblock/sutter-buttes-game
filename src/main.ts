@@ -17,6 +17,9 @@ import { Player } from './birds/player';
 import { ChaseCamera } from './birds/camera';
 import { Controls } from './birds/input';
 import { SPECIES, speciesById, type Palette } from './birds/species';
+import { Trees } from './veg/trees';
+import { ShadowMap } from './render/shadows';
+import { createBirdShadowMaterial } from './birds/birdShader';
 import { LoadingScreen } from './ui/loading';
 import { Menu } from './ui/menu';
 import { Hud } from './ui/hud';
@@ -67,12 +70,23 @@ async function boot() {
   const sky = new Sky();
   engine.scene.add(sky.mesh, terrain.mesh);
 
+  loading.progress('Growing the oak woodland', 0.95);
+  const treeBuf = await fetch('data/trees.bin').then((r) => r.arrayBuffer());
+  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield);
+  engine.scene.add(trees.group);
+  const seasonMonth = () => env.month - 1 + (env.day - 1) / 30;
+  trees.setSeason(seasonMonth());
+
   const air = new AirField(heightfield);
   const species = speciesById(settings.bird) ?? SPECIES[0];
   const player = new Player(species, paletteFor(settings), heightfield, air);
   const sp = (params.get('spawn') || '-500,560,2600,3.1416').split(',').map(Number);
   player.flight.spawn(sp[0], sp[1], sp[2], sp[3]);
   engine.scene.add(player.object);
+
+  const shadow = new ShadowMap();
+  trees.addShadowCasters(shadow);
+  player.shadowCaster = shadow.addCaster(player.model.geometry, createBirdShadowMaterial(), player.object);
 
   const cam = engine.camera;
   const controls = new Controls();
@@ -102,6 +116,7 @@ async function boot() {
       case 'season':
         env.season = s.season;
         env.setPreset(s.time);
+        trees.setSeason(seasonMonth());
         break;
       case 'time':
         env.setPreset(s.time);
@@ -254,6 +269,8 @@ async function boot() {
     atmosphere.update();
     terrainShadow.update();
     terrain.update(cam);
+    trees.update(cam);
+    shadow.update(engine.renderer, free ? cam.position : player.object.position);
     sky.update(cam, env.exposure);
     engine.render(env.exposure, G.uNight.value, G.uTime.value);
     schedule(frame);
@@ -263,7 +280,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places,
+    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     setMode,
   });
