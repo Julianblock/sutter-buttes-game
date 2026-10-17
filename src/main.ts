@@ -83,8 +83,10 @@ async function boot() {
     terrain.update(cam);
     sky.update(cam, env.exposure);
     engine.render(env.exposure);
-    requestAnimationFrame(frame);
+    schedule(frame);
   }
+  // Background/headless tabs throttle rAF; ?timer keeps the loop alive for capture.
+  const schedule = params.has('timer') ? (f: () => void) => setTimeout(f, 16) : requestAnimationFrame;
   frame();
   Object.assign(window, { engine, env, terrain, heightfield, G });
 }
