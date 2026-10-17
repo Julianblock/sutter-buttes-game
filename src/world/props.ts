@@ -150,6 +150,17 @@ export class Props {
     const HOUSE_ROOF = ['#4a4744', '#5a4e44', '#3b3a3a', '#6b5a4a', '#7a4c38'];
     const BARN_WALL = ['#8a2f22', '#9a3a2a', '#c9c6be', '#b7b4ab', '#7a7064'];
     const METAL = ['#c4c6c8', '#b0b4b8', '#d8d8d4', '#9ea3a8'];
+    const addHouse = (x: number, z: number, w: number, d: number, ang: number, s: number, i: number, urban: boolean) => {
+      const h = (urban ? 6.2 : 5.6) + s * 1.6 + (w * d > 200 ? 2.5 : 0);
+      const lit = urban ? (s < 0.75 ? 1 : 0) : s < 0.6 ? 1 : 0;
+      push(KIND.HOUSE, x, z, w, h, d, ang, HOUSE_WALL[i % HOUSE_WALL.length], HOUSE_ROOF[(i * 7) % HOUSE_ROOF.length], lit, s);
+      if (lit) {
+        // Porch / yard light.
+        const y = hf.height(x, z) + 3;
+        const warm = s < 0.3 ? [1, 0.42, 0.1] : s < 0.5 ? [0.75, 0.82, 1] : [1, 0.62, 0.3];
+        this.lights.push(x + Math.cos(ang) * w * 0.6, y, z + Math.sin(ang) * w * 0.6, warm[0], warm[1], warm[2], 0.8, 0);
+      }
+    };
     osm.buildings.forEach(([x, z, w, d, ang], i) => {
       const s = hash(i + x * 0.01);
       const area = w * d;
@@ -169,16 +180,61 @@ export class Props {
         push(KIND.SHED, x, z, w, h, d, ang, wall, METAL[(i + 1) % METAL.length], 0, s);
         return;
       }
-      const h = (urban ? 6.2 : 5.6) + s * 1.6 + (area > 200 ? 2.5 : 0);
-      const lit = urban ? (s < 0.75 ? 1 : 0) : s < 0.6 ? 1 : 0;
-      push(KIND.HOUSE, x, z, w, h, d, ang, HOUSE_WALL[i % HOUSE_WALL.length], HOUSE_ROOF[(i * 7) % HOUSE_ROOF.length], lit, s);
-      if (lit) {
-        // Porch / yard light.
-        const y = hf.height(x, z) + 3;
-        const warm = s < 0.3 ? [1, 0.55, 0.22] : [1, 0.82, 0.6];
-        this.lights.push(x + Math.cos(ang) * w * 0.6, y, z + Math.sin(ang) * w * 0.6, warm[0], warm[1], warm[2], 1, 0);
-      }
+      addHouse(x, z, w, d, ang, s, i, urban);
     });
+
+    // Small towns are barely mapped in OSM: infill homes along residential
+    // streets in built-up land cover, skipping lots that already hold a building.
+    const occ = new Set<number>();
+    const key = (x: number, z: number) => Math.floor(x / 16) * 100003 + Math.floor(z / 16);
+    for (const [x, z] of osm.buildings) occ.add(key(x, z));
+    const isUrban = (x: number, z: number) => {
+      const lc = hf.landcover(x, z);
+      return lc >= LC.URBAN_LOW && lc <= LC.URBAN_HIGH;
+    };
+    let seed = 1;
+    for (const road of osm.roads) {
+      const res = road.kind === 'residential';
+      const town = res || road.kind === 'tertiary' || road.kind === 'secondary' || road.kind === 'unclassified';
+      if (!town) continue;
+      const p = road.pts;
+      let lamp = 0;
+      for (let k = 0; k + 3 < p.length; k += 2) {
+        const dx = p[k + 2] - p[k];
+        const dz = p[k + 3] - p[k + 1];
+        const len = Math.hypot(dx, dz);
+        if (len < 1) continue;
+        const ux = dx / len;
+        const uz = dz / len;
+        const ang = Math.atan2(uz, ux);
+        for (let t = 8; t < len; t += 21) {
+          const cx = p[k] + ux * t;
+          const cz = p[k + 1] + uz * t;
+          if (!isUrban(cx, cz)) continue;
+          lamp += 21;
+          if (lamp > 70) {
+            lamp = 0;
+            const sx = cx - uz * 6;
+            const sz = cz + ux * 6;
+            // Mix of old high-pressure sodium and newer LED streetlights.
+            const led = hash(seed * 1.3) < 0.4;
+            this.lights.push(sx, hf.height(sx, sz) + 8, sz, led ? 0.85 : 1, led ? 0.88 : 0.48, led ? 0.9 : 0.12, 1.6, 0);
+          }
+          if (!res) continue;
+          for (const side of [-1, 1]) {
+            const s = hash(seed++);
+            if (s < 0.12) continue;
+            const off = 17 + s * 4;
+            const hx = cx - uz * off * side;
+            const hz = cz + ux * off * side;
+            const kk = key(hx, hz);
+            if (occ.has(kk) || !isUrban(hx, hz)) continue;
+            occ.add(kk);
+            addHouse(hx, hz, 13 + s * 6, 10 + s * 4, ang, s, seed, true);
+          }
+        }
+      }
+    }
 
     // South Butte summit antenna farm (heights from FCC records of the site).
     const summit = [
