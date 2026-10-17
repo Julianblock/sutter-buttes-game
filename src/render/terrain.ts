@@ -13,6 +13,7 @@ export const seasonUniforms = {
   uVeg: { value: new THREE.Vector4(0, 1, 0, 0) },
   uRice: { value: new THREE.Vector4(0, 0, 1, 0) },
   uOrchard: { value: new THREE.Vector4(0, 0, 0, 0) },
+  uSnowLine: { value: 3000 },
 };
 
 function patchGeometry(): THREE.InstancedBufferGeometry {

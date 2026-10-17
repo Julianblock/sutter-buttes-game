@@ -44,6 +44,7 @@ uniform float uLcSize;
 uniform vec4 uVeg;      // grass green, oak leaf-out, wildflowers, wetland flooding
 uniform vec4 uRice;     // flooded, sprouting, mature green, golden/harvested
 uniform vec4 uOrchard;  // bare, almond blossom, fruit blossom, autumn colour
+uniform float uSnowLine;
 in vec3 vWorld;
 out vec4 outColor;
 
@@ -113,6 +114,12 @@ void main() {
   vec3 rock = mix(vec3(0.16, 0.155, 0.15), vec3(0.24, 0.13, 0.08), smoothstep(0.55, 0.8, nA));
   rock *= 0.8 + 0.4 * vnoise(xz / 1.7);
   alb = mix(alb, rock, rocky * 0.75);
+
+  // Snowpack on the Sierra Nevada, Lassen and the Coast Range peaks.
+  float snowN = fbm(xz / 3000.0, 4);
+  float snow = smoothstep(uSnowLine - 250.0 + snowN * 500.0, uSnowLine + 250.0 + snowN * 500.0, vWorld.y);
+  snow *= 1.0 - smoothstep(0.45, 0.75, slope) * 0.7;
+  alb = mix(alb, vec3(0.82, 0.85, 0.9), snow);
 
   // --- Rice ---------------------------------------------------------------------
   float waterFrac = 0.0;
