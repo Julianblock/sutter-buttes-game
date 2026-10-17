@@ -156,7 +156,8 @@ vec3 applyAtmosphere(vec3 color, vec3 wp) {
   vec3 T = exp(-tau);
   // Normalise the sky-view radiance (which integrates to the ground/top) by the
   // transmittance along the full ray, giving in-scatter for this segment only.
-  float dFull = dy < -0.002 ? min(max(y0, 1.0) / -dy, 300000.0) : 300000.0;
+  float rCam = R_GROUND + max(y0, 1.0) + 2.0;
+  float dFull = hitsGround(rCam, dy) ? min(distanceToGround(rCam, dy), 400000.0) : 400000.0;
   vec3 tauFull = RAYLEIGH_SCAT * layerDepth(y0, dy, dFull, RAYLEIGH_H)
                + vec3(MIE_EXT * uMieScale) * layerDepth(y0, dy, dFull, MIE_H);
   vec3 sky = skyRadianceDir(dir);
