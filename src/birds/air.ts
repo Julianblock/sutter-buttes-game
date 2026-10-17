@@ -28,6 +28,8 @@ export class AirField {
   windZ = 1.2;
   thermalTop = 1600;
   time = 0;
+  lastThermal = 0;
+  lastRidge = 0;
   private n = { x: 0, y: 1, z: 0 };
 
   constructor(private hf: Heightfield) {}
@@ -86,8 +88,9 @@ export class AirField {
     this.hf.normal(x, z, this.n, 12);
     const slopeUp = -(this.n.x * this.windX + this.n.z * this.windZ) / Math.max(this.n.y, 0.2);
     const ridge = slopeUp * Math.exp(-Math.max(agl, 0) / 180);
-    w += ridge;
-    return w;
+    this.lastThermal = w;
+    this.lastRidge = ridge;
+    return w + ridge;
   }
 }
 
