@@ -1,4 +1,5 @@
 import './style.css';
+import './ui/ui.css';
 import * as THREE from 'three';
 import { Engine } from './render/engine';
 import { Atmosphere } from './render/atmosphere';
@@ -9,19 +10,40 @@ import { Sky } from './sky/sky';
 import { loadWorld } from './world/loader';
 import { Heightfield } from './world/heightfield';
 import { createWorldTextures } from './world/textures';
-import { Environment, type Season, type TimePreset, type Weather } from './world/environment';
+import { Environment } from './world/environment';
+import { Places } from './world/places';
 import { AirField } from './birds/air';
 import { Player } from './birds/player';
 import { ChaseCamera } from './birds/camera';
 import { Controls } from './birds/input';
-import { SPECIES, speciesById } from './birds/species';
+import { SPECIES, speciesById, type Palette } from './birds/species';
+import { LoadingScreen } from './ui/loading';
+import { Menu } from './ui/menu';
+import { Hud } from './ui/hud';
+import { loadSettings, saveSettings, type GameSettings } from './ui/settings';
+
+function paletteFor(s: GameSettings): Palette {
+  const sp = speciesById(s.bird) ?? SPECIES[0];
+  const base = sp.palettes[s.palette] ?? sp.palettes[0];
+  const c = s.custom;
+  const p: Palette = { ...base };
+  if (c.back) Object.assign(p, { back: c.back, coverts: c.back, secondaries: c.back });
+  if (c.belly) Object.assign(p, { belly: c.belly, breast: c.belly, underCoverts: c.belly });
+  if (c.head) p.head = c.head;
+  if (c.tail) Object.assign(p, { tail: c.tail, tailUnder: c.tail });
+  return p;
+}
 
 async function boot() {
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
-  const engine = new Engine(canvas);
+  const ui = document.getElementById('ui')!;
   const params = new URLSearchParams(location.search);
+  const loading = new LoadingScreen();
+  document.body.append(loading.root);
 
-  const world = await loadWorld((label, f) => console.log(`[load] ${label} ${(f * 100).toFixed(0)}%`));
+  const engine = new Engine(canvas);
+  const world = await loadWorld((label, f) => loading.progress(label, f * 0.9));
+  loading.progress('Building the valley', 0.92);
   const heightfield = new Heightfield(world);
   const tex = createWorldTextures(world, engine.renderer);
   const regionSizes: [number, number, number] = [
@@ -30,10 +52,13 @@ async function boot() {
     world.meta.regions.far.size,
   ];
 
+  const settings = loadSettings(params);
   const env = new Environment();
-  env.season = (params.get('season') as Season) || 'summer';
-  env.weather = (params.get('weather') as Weather) || 'clear';
-  env.setPreset((params.get('time') as TimePreset) || 'golden');
+  env.season = settings.season;
+  env.weather = settings.weather;
+  env.moon = settings.moon;
+  env.timeFlow = settings.timeFlow;
+  env.setPreset(settings.time);
   env.apply(0);
 
   const atmosphere = new Atmosphere(engine.renderer);
@@ -43,20 +68,85 @@ async function boot() {
   engine.scene.add(sky.mesh, terrain.mesh);
 
   const air = new AirField(heightfield);
-  const species = speciesById(params.get('bird') || 'redtail') ?? SPECIES[0];
-  const palette = species.palettes[Number(params.get('palette') || 0)] ?? species.palettes[0];
-  const player = new Player(species, palette, heightfield, air);
-  const sp = (params.get('spawn') || '1800,620,3600,3.3').split(',').map(Number);
+  const species = speciesById(settings.bird) ?? SPECIES[0];
+  const player = new Player(species, paletteFor(settings), heightfield, air);
+  const sp = (params.get('spawn') || '-500,560,2600,3.1416').split(',').map(Number);
   player.flight.spawn(sp[0], sp[1], sp[2], sp[3]);
   engine.scene.add(player.object);
 
   const cam = engine.camera;
   const controls = new Controls();
+  controls.invertPitch = settings.invertPitch;
   const chase = new ChaseCamera(cam, heightfield, canvas);
+  const places = new Places(world.osm);
+  const hud = new Hud(places);
+  hud.units = settings.units;
+  const menu = new Menu(settings);
+  ui.append(menu.root, hud.root, hud.help);
+
   const free = params.has('free');
   const inspect = params.has('inspect');
   let inspectAngle = Number(params.get('inspect') || 0.8);
   let inspectHeight = 0.35;
+  let mode: 'menu' | 'fly' = params.has('fly') ? 'fly' : 'menu';
+  const previewAngle = 0.95;
+  let previewT = 0;
+
+  const applySettings = (s: GameSettings, what: keyof GameSettings) => {
+    switch (what) {
+      case 'bird':
+      case 'palette':
+      case 'custom':
+        player.setBird(speciesById(s.bird) ?? SPECIES[0], paletteFor(s));
+        break;
+      case 'season':
+        env.season = s.season;
+        env.setPreset(s.time);
+        break;
+      case 'time':
+        env.setPreset(s.time);
+        break;
+      case 'weather':
+        env.weather = s.weather;
+        break;
+      case 'moon':
+        env.moon = s.moon;
+        env.setPreset(s.time);
+        break;
+      case 'timeFlow':
+        env.timeFlow = s.timeFlow;
+        break;
+      case 'invertPitch':
+        controls.invertPitch = s.invertPitch;
+        break;
+      case 'units':
+        hud.units = s.units;
+        break;
+    }
+    saveSettings(s);
+  };
+  menu.onChange = applySettings;
+
+  const setMode = (m: 'menu' | 'fly') => {
+    mode = m;
+    menu.show(m === 'menu');
+    hud.show(m === 'fly');
+    if (m === 'fly') {
+      chase.snapFrom(cam, player.object.position);
+      canvas.focus();
+    } else {
+      hud.toggleHelp(false);
+    }
+  };
+  menu.onFly = () => setMode('fly');
+  setMode(mode);
+
+  addEventListener('keydown', (e) => {
+    if (e.code === 'Escape') setMode(mode === 'menu' ? 'fly' : 'menu');
+    if (mode !== 'fly') return;
+    if (e.code === 'KeyH') hud.toggleHelp();
+    if (e.code === 'KeyT') hud.toggleHidden();
+  });
 
   // Debug free camera (?free).
   const c = (params.get('cam') || '0,900,9000,0,-0.08').split(',').map(Number);
@@ -86,6 +176,38 @@ async function boot() {
     cam.updateMatrixWorld();
   }
 
+  const tmpRight = new THREE.Vector3();
+  function previewCam(dt: number) {
+    // Menu backdrop: the bird hangs in the air while the camera drifts around it.
+    previewT += dt;
+    player.flight.animateOnly(dt, previewT);
+    player.sync();
+    const b = player.object.position;
+    const r = player.species.shape.wingspan * 2.1 + 1.2;
+    // Keep the camera on the lit side of the bird, swaying slowly.
+    const L = G.uSunDir.value.y > -0.05 ? G.uSunDir.value : G.uMoonDir.value;
+    const sunAz = Math.atan2(L.x, L.z);
+    // Front three-quarter view, on whichever side faces the light.
+    const psi = player.flight.psi;
+    const off = (x: number) => Math.abs(Math.atan2(Math.sin(x - sunAz), Math.cos(x - sunAz)));
+    const side = off(psi + previewAngle) < off(psi - previewAngle) ? 1 : -1;
+    const a = psi + side * (previewAngle + Math.sin(previewT * 0.12) * 0.35);
+    cam.position.set(b.x + Math.sin(a) * r, b.y + r * 0.32, b.z + Math.cos(a) * r);
+    const gh = heightfield.height(cam.position.x, cam.position.z);
+    cam.position.y = Math.max(cam.position.y, gh + 1.5);
+    cam.fov = 42;
+    cam.updateProjectionMatrix();
+    cam.up.set(0, 1, 0);
+    cam.lookAt(b);
+    // Shift the bird right of centre, clear of the menu panel.
+    if (innerWidth > 820) {
+      tmpRight.setFromMatrixColumn(cam.matrix, 0);
+      const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * r * cam.aspect;
+      cam.lookAt(b.clone().addScaledVector(tmpRight, -halfW * 0.38));
+    }
+    cam.updateMatrixWorld();
+  }
+
   const clock = new THREE.Clock();
   let lastMie = -1;
   function frame() {
@@ -101,7 +223,6 @@ async function boot() {
     if (free) {
       freeCam(dt);
     } else if (inspect) {
-      // Model viewer: frozen glide pose, camera orbiting the bird.
       inspectAngle += dt * 0.25;
       const b = player.flight.pos;
       player.flight.quaternion.identity();
@@ -112,12 +233,16 @@ async function boot() {
       cam.updateProjectionMatrix();
       cam.lookAt(b);
       cam.updateMatrixWorld();
+    } else if (mode === 'menu') {
+      controls.update(dt);
+      previewCam(dt);
     } else {
       const input = controls.update(dt);
       if (controls.consume('KeyC')) chase.cycle();
       player.step(dt, input);
       player.sync();
       chase.update(dt, player.flight, player.object);
+      hud.update(dt, player.flight, air);
     }
 
     if (G.uMieScale.value !== lastMie) {
@@ -136,9 +261,11 @@ async function boot() {
   // Background/headless tabs throttle rAF; ?timer keeps the loop alive for capture.
   const schedule = params.has('timer') ? (f: () => void) => setTimeout(f, 16) : requestAnimationFrame;
   frame();
+  loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls,
+    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
+    setMode,
   });
 }
 
