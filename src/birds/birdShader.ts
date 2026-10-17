@@ -122,6 +122,12 @@ void main() {
     float edge = smoothstep(0.02, 0.0, fline) + smoothstep(0.94, 1.0, fline);
     float flight = smoothstep(0.38, 0.5, c);
     float hand = smoothstep(0.45, 0.58, s);
+    // Scalloped trailing edge: each flight feather ends in a rounded tip.
+    if (s < uPat3.z - 0.01) {
+      float ff = fract(s * nFeather * (s < 0.5 ? 1.0 : 1.4));
+      float tip = 0.955 + 0.045 * sqrt(max(0.0, 1.0 - pow(2.0 * ff - 1.0, 2.0)));
+      if (c > tip) discard;
+    }
     if (top) {
       vec3 flt = mix(cSecondaries, cPrimaries, hand);
       albedo = mix(cCoverts, flt, flight);
@@ -170,6 +176,7 @@ void main() {
       albedo = mix(albedo, cTailBand, b * smoothstep(0.08, 0.2, r) * (vPart == 3 ? 1.0 : 0.7));
     }
     float rect = fract((x * 0.5 + 0.5) * 12.0);
+    if (r > 0.95 + 0.05 * sqrt(max(0.0, 1.0 - pow(2.0 * rect - 1.0, 2.0)))) discard;
     albedo *= 1.0 - 0.12 * (smoothstep(0.03, 0.0, rect) + smoothstep(0.97, 1.0, rect));
     thin = 0.5;
     rough = 0.72;
@@ -206,8 +213,10 @@ void main() {
 }
 `;
 
+/** Palette hexes are as-photographed colours; lift darks into plausible albedo. */
 function lin(hex: string): THREE.Color {
-  return new THREE.Color(hex).convertSRGBToLinear();
+  const c = new THREE.Color(hex); // ColorManagement already decodes sRGB to linear
+  return c.setRGB(Math.pow(c.r, 0.92) * 0.85, Math.pow(c.g, 0.92) * 0.85, Math.pow(c.b, 0.92) * 0.85);
 }
 
 const COLOR_KEYS = [
