@@ -24,6 +24,7 @@ import { LightPoints } from './render/lightPoints';
 import { Traffic } from './life/traffic';
 import { Roads } from './world/roads';
 import { Wildlife } from './life/wildlife';
+import { Flocks } from './life/flocks';
 import { createBirdShadowMaterial } from './birds/birdShader';
 import { LoadingScreen } from './ui/loading';
 import { Menu } from './ui/menu';
@@ -92,6 +93,9 @@ async function boot() {
   engine.scene.add(traffic.group);
   const wildlife = new Wildlife(heightfield);
   engine.scene.add(wildlife.group);
+  const flocks = new Flocks(heightfield);
+  flocks.setMonth(env.month);
+  engine.scene.add(flocks.mesh);
 
   const air = new AirField(heightfield);
   const species = speciesById(settings.bird) ?? SPECIES[0];
@@ -302,6 +306,8 @@ async function boot() {
     traffic.lights.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.update(dt, cam.position, G.uNight.value);
     wildlife.update(dt, cam.position, player.object.position);
+    flocks.setMonth(env.month);
+    flocks.update(dt, cam.position, { x: air.windX, z: air.windZ });
     shadow.update(engine.renderer, free ? cam.position : player.object.position);
     G.uInvExposure.value = 1 / env.exposure;
     sky.update(cam, env.exposure);
@@ -313,7 +319,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife,
+    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     setMode,
   });
