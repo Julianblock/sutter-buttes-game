@@ -122,7 +122,7 @@ export class FlightModel {
     const agility = f.climb * (1 + 0.6 * inp.tuck);
     const maxBank = f.soarer ? 1.0 : 1.1;
     const target = inp.roll * maxBank;
-    const rate = (Math.abs(target) > Math.abs(this.phi) ? 2.2 : 3.2) * Math.min(agility, 1.3);
+    const rate = (Math.abs(target) > Math.abs(this.phi) ? 2.4 : 3.4) * (0.6 + 0.4 * Math.min(agility, 1.5));
     this.phi = clamp(approach(this.phi, target, rate, dt), -maxBank, maxBank);
 
     // Load factor: neutral holds the path (coordinated turn), pitch input pulls.
