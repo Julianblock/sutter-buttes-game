@@ -21,6 +21,7 @@ export class Hud {
     <tr><td><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd></td><td>Bank left / right</td></tr>
     <tr><td><kbd>Q</kbd><kbd>E</kbd></td><td>Rudder (fine turn)</td></tr>
     <tr><td><kbd>Space</kbd></td><td>Flap (hold) · take off when perched</td></tr>
+    <tr><td><kbd>R</kbd></td><td>Sprint (hard flapping)</td></tr>
     <tr><td><kbd>Shift</kbd></td><td>Tuck wings and stoop</td></tr>
     <tr><td><kbd>F</kbd> / <kbd>Ctrl</kbd></td><td>Flare / air-brake · land gently</td></tr>
     <tr><td><kbd>C</kbd></td><td>Camera: chase · far · side · head · cinematic</td></tr>
