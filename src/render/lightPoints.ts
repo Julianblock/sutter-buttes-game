@@ -33,10 +33,11 @@ void main() {
     on *= 0.85 + 0.15 * sin(uTime * 3.0 + position.x * 1.7 + position.z);
   }
   float px = aColor.w * uPixelScale / max(dist, 1.0);
-  float size = max(px * 6.0, 2.5);
-  // Below ~2.5 px fade energy rather than shrink so totals stay stable.
-  vCore = clamp(px * 6.0 / 2.5, 0.0, 1.0);
-  vColor = aColor.rgb * on;
+  float size = clamp(px * 3.0, 3.0, 32.0);
+  // Sub-pixel lamps keep a 3 px footprint and lose energy with distance
+  // instead, flattening the profile so the centre texel isn't missed.
+  vCore = clamp(px, 0.0, 1.0);
+  vColor = aColor.rgb * on * mix(0.25 + 0.75 * vCore, 1.0, step(0.5, aBlink));
   gl_PointSize = on > 0.001 ? size : 0.0;
   #include <logdepthbuf_vertex>
 }
@@ -55,12 +56,10 @@ void main() {
   vec2 p = gl_PointCoord * 2.0 - 1.0;
   float r2 = dot(p, p);
   if (r2 > 1.0) discard;
-  float core = exp(-r2 * 14.0);
-  float halo = exp(-r2 * 3.5) * 0.18;
-  vec3 c = vColor * (core * 6.0 + halo) * mix(0.35, 1.0, vCore);
-  vec3 dir = vWorld - uCamPos;
-  float d = length(dir);
-  c *= transmittanceAt(uCamPos.y, dir / max(d, 1.0)) * exp(-d * uFogDensity * 0.6);
+  float core = exp(-r2 * mix(2.0, 16.0, vCore));
+  float halo = exp(-r2 * 4.0) * 0.12;
+  vec3 c = vColor * (core * 2.2 + halo) * uInvExposure;
+  c *= segmentTransmittance(vWorld);
   outColor = vec4(c, 1.0);
 }
 `;
