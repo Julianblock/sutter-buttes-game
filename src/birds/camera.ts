@@ -106,8 +106,8 @@ export class ChaseCamera {
       rollFollow = 0;
       fov = THREE.MathUtils.clamp(2 * Math.atan((span * 6) / (2 * Math.max(d0, 1))) * THREE.MathUtils.RAD2DEG, 8, 60);
     } else {
-      let dist = span * 3.2 + 1.2;
-      let height = span * 0.55;
+      let dist = span * 2.3 + 0.9;
+      let height = span * 0.42;
       if (this.mode === 'far') {
         dist = span * 9 + 6;
         height = span * 2.0;
