@@ -134,6 +134,9 @@ void main() {
     leafC *= 0.8 + 0.4 * nz;
     // Per-tree autumn variation (some trees turn earlier).
     leafC = mix(leafC, uFallTint, clamp((fract(vSeed * 53.1) - 0.5) * 0.6, 0.0, 1.0) * float(vSpecies != 1 && vSpecies != 4));
+    // Oak canopy reflects far less than its leaf colour suggests (self-shadowed
+    // gaps, waxy dusty leaves): darken and desaturate toward grey-green.
+    leafC = mix(vec3(dot(leafC, vec3(0.3, 0.55, 0.15))), leafC, 0.8) * 0.62;
     albedo = mix(uBarkColor[vSpecies] * 0.8, leafC, smoothstep(0.0, 0.5, amount));
     thin = amount;
   } else {
@@ -144,7 +147,7 @@ void main() {
   float shadow = shadowAt(vWorld + n * 0.3, 0.002);
   vec3 sun = sunRadiance(vWorld.y);
   vec3 moon = moonRadiance(vWorld.y);
-  float wrap = vLeaf > 0.5 ? 0.45 : 0.1;
+  float wrap = vLeaf > 0.5 ? 0.3 : 0.1;
   float ndl = clamp((dot(n, uSunDir) + wrap) / (1.0 + wrap), 0.0, 1.0);
   float ndlM = clamp((dot(n, uMoonDir) + wrap) / (1.0 + wrap), 0.0, 1.0);
   float ao = vAO;
