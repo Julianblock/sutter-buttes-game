@@ -25,6 +25,8 @@ import { Traffic } from './life/traffic';
 import { Roads } from './world/roads';
 import { Wildlife } from './life/wildlife';
 import { Flocks } from './life/flocks';
+import { SoundScape, type AudioState } from './audio/audio';
+import { LC } from './world/meta';
 import { createBirdShadowMaterial } from './birds/birdShader';
 import { LoadingScreen } from './ui/loading';
 import { Menu } from './ui/menu';
@@ -175,7 +177,14 @@ async function boot() {
       hud.toggleHelp(false);
     }
   };
-  menu.onFly = () => setMode('fly');
+  const sound = new SoundScape();
+  const wake = () => sound.start();
+  addEventListener('pointerdown', wake);
+  addEventListener('keydown', wake);
+  menu.onFly = () => {
+    sound.start();
+    setMode('fly');
+  };
   setMode(mode);
 
   addEventListener('keydown', (e) => {
@@ -183,7 +192,51 @@ async function boot() {
     if (mode !== 'fly') return;
     if (e.code === 'KeyH') hud.toggleHelp();
     if (e.code === 'KeyT') hud.toggleHidden();
+    if (e.code === 'KeyV') sound.call(player.species.id);
+    if (e.code === 'KeyM') sound.setMuted(!sound.muted);
   });
+
+  // Habitat sampled in a ring under the bird drives the ambient soundscape.
+  const aud: AudioState = {
+    speed: 0, agl: 100, flapPhase: 0, flapAmount: 0, perched: false, night: 0, month: 6, hour: 12,
+    wet: 0, grass: 0, geese: Infinity, cattle: Infinity, car: Infinity, carSpeed: 0, active: false,
+  };
+  let habitatT = 0;
+  const updateSound = (dt: number) => {
+    const f = player.flight;
+    const p = player.object.position;
+    habitatT -= dt;
+    if (habitatT <= 0) {
+      habitatT = 0.5;
+      let wet = 0;
+      let grass = 0;
+      const R = 60 + Math.min(f.agl, 400) * 0.5;
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const r = i % 2 ? R : R * 0.4;
+        const lc = heightfield.landcover(p.x + Math.cos(a) * r, p.z + Math.sin(a) * r);
+        if (lc === LC.RICE || lc === LC.WETLAND || lc === LC.WATER) wet++;
+        if (lc === LC.GRASS || lc === LC.HAY || lc === LC.FALLOW || lc === LC.WOODLAND) grass++;
+      }
+      aud.wet = wet / 12;
+      aud.grass = grass / 12;
+      aud.geese = flocks.nearest(p, 0);
+      aud.cattle = wildlife.nearest(p, 'cattle');
+      const c = traffic.nearest(p);
+      aud.car = c.d;
+      aud.carSpeed = c.v;
+    }
+    aud.speed = f.speed;
+    aud.agl = f.agl;
+    aud.flapPhase = f.flapPhase;
+    aud.flapAmount = f.flapAmount;
+    aud.perched = f.state === 'perched';
+    aud.night = G.uNight.value;
+    aud.month = env.month;
+    aud.hour = env.hours;
+    aud.active = mode === 'fly' && !free;
+    sound.update(dt, aud);
+  };
 
   // Debug free camera (?free).
   const c = (params.get('cam') || '0,900,9000,0,-0.08').split(',').map(Number);
@@ -312,6 +365,7 @@ async function boot() {
     props.update(cam.position, focus);
     shadow.update(engine.renderer, focus);
     G.uInvExposure.value = 1 / env.exposure;
+    updateSound(dt);
     sky.update(cam, env.exposure);
     engine.render(env.exposure, G.uNight.value, G.uTime.value);
     schedule(frame);
@@ -321,7 +375,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks,
+    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     setMode,
   });
