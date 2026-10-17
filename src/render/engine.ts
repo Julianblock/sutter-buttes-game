@@ -51,7 +51,8 @@ export class Engine {
       uniforms: { tDiffuse: { value: null }, uExposure: { value: 1 } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader:
-        'uniform sampler2D tDiffuse; uniform float uExposure; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(tDiffuse, vUv).rgb * uExposure, 1.0); }',
+        // Clamp so a stray NaN/Inf pixel can never be smeared over the frame by bloom.
+        'uniform sampler2D tDiffuse; uniform float uExposure; varying vec2 vUv; void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb * uExposure; c = clamp(c, vec3(0.0), vec3(64.0)); if (!(c.r + c.g + c.b < 1e6)) c = vec3(0.0); gl_FragColor = vec4(c, 1.0); }',
     });
     this.composer.addPass(this.exposurePass);
     this.bloom = new UnrealBloomPass(size.clone().multiplyScalar(0.5), 0.3, 0.6, 2.2);
