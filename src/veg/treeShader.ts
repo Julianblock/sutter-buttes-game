@@ -1,8 +1,11 @@
 import { lightingCommon } from '../render/shaders/lighting';
+import { noiseCommon } from '../render/shaders/noise';
+import { windCommon } from '../render/shaders/wind';
 
 export const SPECIES_COUNT = 8;
 
 export const treeVertex = /* glsl */ `
+${noiseCommon}
 #include <common>
 #include <logdepthbuf_pars_vertex>
 uniform vec3 uCamPos;
@@ -26,6 +29,8 @@ flat out int vSpecies;
 flat out float vSeed;
 flat out float vLeaf;
 flat out vec2 vSize;
+out float vGust;
+${windCommon}
 
 void main() {
   vec3 local = position;
@@ -50,12 +55,22 @@ void main() {
   float r = aInst1.x;
   float h = aInst1.y;
   float rot = aInst0.w;
-  // Wind sway grows with height.
+  // Wind: trunk sway and a downwind lean that both swell as gusts pass,
+  // plus leaf clusters bobbing on their twigs.
   float wind = length(uWind);
+  float gust = windGust(aInst0.xz);
+  vGust = gust * smoothstep(0.5, 4.0, wind);
   float ph = uTime * (1.1 + 0.4 * fract(aInst1.w * 7.0)) + aInst1.w * 6.2831 + aInst0.x * 0.03;
-  float sway = (sin(ph) + 0.4 * sin(ph * 2.3 + 1.0)) * 0.012 * (0.4 + wind * 0.15) * local.y * local.y;
+  float sway = (sin(ph) + 0.4 * sin(ph * 2.3 + 1.0)) * 0.012 * (0.4 + wind * 0.15) * (0.6 + 1.6 * gust);
+  sway += 0.004 * wind * (0.3 + gust);
+  sway *= local.y * local.y;
+  if (leaf > 0.5) {
+    float ch = fract(sin(dot(c, vec3(12.9, 78.2, 37.7))) * 43758.5);
+    float bob = sin(uTime * (2.5 + 2.0 * ch) + ch * 6.28) * 0.012 * (0.3 + gust) * (0.4 + wind * 0.12);
+    local += vec3(bob, bob * 0.5, -bob * 0.7);
+  }
   vec3 p = vec3(local.x * r, local.y * h, local.z * r);
-  p.xz += normalize(uWind + 1e-4) * sway * h;
+  p.xz += windDir() * sway * h;
   float cs = cos(rot), sn = sin(rot);
   p.xz = mat2(cs, -sn, sn, cs) * p.xz;
   n = normalize(vec3(n.x / r, n.y / h, n.z / r));
@@ -98,10 +113,28 @@ flat in int vSpecies;
 flat in float vSeed;
 flat in float vLeaf;
 flat in vec2 vSize;
+in float vGust;
 #ifdef SHADOW_PASS
 in float vShadowZ;
 #endif
 out vec4 outColor;
+
+/** Nearest elliptical leaf in a jittered 3D grid: x = distance, yzw = cell id. */
+vec4 leafCells(vec3 q) {
+  vec3 ci = floor(q);
+  vec3 o = step(0.5, fract(q)) - 1.0;
+  float best = 9.0;
+  vec3 bestId = ci;
+  for (int k = 0; k < 8; k++) {
+    vec3 c = ci + o + vec3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
+    vec3 dv = q - (c + vec3(hash13(c), hash13(c + 19.1), hash13(c + 47.7)));
+    vec3 axis = normalize(vec3(hash13(c + 2.9), hash13(c + 6.1), hash13(c + 8.3)) - 0.5);
+    float al = dot(dv, axis);
+    float dd = sqrt(dot(dv, dv) + 2.2 * al * al) / (0.5 + 0.35 * hash13(c + 11.3));
+    if (dd < best) { best = dd; bestId = c; }
+  }
+  return vec4(best, bestId);
+}
 
 void main() {
   #include <logdepthbuf_fragment>
@@ -137,33 +170,31 @@ void main() {
     if (!inner && dist < 900.0 && edge > 0.5 && leafy < (edge - 0.5) * 2.4 * smoothstep(900.0, 500.0, dist)) discard;
     vec3 leafC = uLeafColor[vSpecies] * (0.82 + 0.36 * fract(vSeed * 91.7));
     leafC *= 0.8 + 0.4 * nz;
-    // Individual leaf clumps up close: gaps between them, each tilted and toned
-    // differently, fading out once a clump shrinks below a few pixels.
+    // Leaf structure at two scales: individual leaves up close, then leaf
+    // clumps at mid range. Each cell is tilted and toned differently, gaps open
+    // between cells (mostly at the silhouette), and cell rims self-shadow.
     vec3 pm = vLocal * vec3(vSize.x, vSize.y, vSize.x);
-    const float L = 0.12;
-    float strength = inner ? 0.0 : smoothstep(L * 1.2, L * 0.35, length(fwidth(pm)));
-    if (strength > 0.0) {
-      vec3 q = pm / L + vSeed * 17.0;
-      vec3 ci = floor(q);
-      vec3 o = step(0.5, fract(q)) - 1.0;
-      float best = 9.0;
-      vec3 bestId = ci;
-      for (int k = 0; k < 8; k++) {
-        vec3 c = ci + o + vec3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
-        vec3 fp = c + vec3(hash13(c), hash13(c + 19.1), hash13(c + 47.7));
-        vec3 dv = q - fp;
-        // Elliptical leaf with a random midrib direction and size.
-        vec3 axis = normalize(vec3(hash13(c + 2.9), hash13(c + 6.1), hash13(c + 8.3)) - 0.5);
-        float al = dot(dv, axis);
-        float sz = 0.5 + 0.35 * hash13(c + 11.3);
-        float dd = sqrt(dot(dv, dv) + 2.2 * al * al) / sz;
-        if (dd < best) { best = dd; bestId = c; }
-      }
+    float fp = length(fwidth(pm));
+    float sFine = inner ? 0.0 : smoothstep(0.15, 0.045, fp);
+    float sCoarse = inner ? 0.0 : smoothstep(0.7, 0.2, fp) * (1.0 - sFine);
+    if (sFine > 0.0) {
+      vec4 c = leafCells(pm / 0.12 + vSeed * 17.0);
       float cut = mix(1.15, 0.85, edge);
-      if (best > mix(9.0, cut, strength)) discard;
-      vec3 leafN = vec3(hash13(bestId + 5.1), hash13(bestId + 7.7), hash13(bestId + 9.9)) - 0.5;
-      n = normalize(n + leafN * 1.1 * strength);
-      leafC *= mix(1.0, 0.8 + 0.4 * hash13(bestId + 3.3), strength);
+      if (c.x > mix(9.0, cut, sFine)) discard;
+      vec3 leafN = vec3(hash13(c.yzw + 5.1), hash13(c.yzw + 7.7), hash13(c.yzw + 9.9)) - 0.5;
+      // Gusts set leaves fluttering.
+      leafN += 0.5 * vGust * sin(uTime * 9.0 + hash13(c.yzw) * 6.28) * vec3(0.6, 1.0, 0.4);
+      n = normalize(n + leafN * 1.1 * sFine);
+      leafC *= mix(1.0, (0.8 + 0.4 * hash13(c.yzw + 3.3)) * (0.75 + 0.25 * (1.0 - c.x / cut)), sFine);
+    }
+    if (sCoarse > 0.0) {
+      vec4 c = leafCells(pm / 0.55 + vSeed * 5.0);
+      float cut = mix(1.6, 0.95, edge * edge);
+      if (c.x > mix(9.0, cut, sCoarse)) discard;
+      vec3 clumpN = vec3(hash13(c.yzw + 5.1), hash13(c.yzw + 7.7), hash13(c.yzw + 9.9)) - 0.5;
+      clumpN += 0.25 * vGust * sin(uTime * 5.0 + hash13(c.yzw) * 6.28);
+      n = normalize(n + clumpN * 0.8 * sCoarse);
+      leafC *= mix(1.0, (0.85 + 0.3 * hash13(c.yzw + 3.3)) * (0.6 + 0.4 * (1.0 - c.x / cut)), sCoarse);
     }
     if (inner) leafC *= 0.55;
     // Per-tree autumn variation (some trees turn earlier).
