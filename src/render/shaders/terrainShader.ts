@@ -57,8 +57,15 @@ vec3 rippleNormal(vec2 xz, float dist) {
   float a = vnoise((xz + w * 0.6) * s) + 0.5 * vnoise((xz * 2.7 - w) * s);
   float b = vnoise((xz + vec2(e, 0.0) + w * 0.6) * s) + 0.5 * vnoise(((xz + vec2(e, 0.0)) * 2.7 - w) * s);
   float c = vnoise((xz + vec2(0.0, e) + w * 0.6) * s) + 0.5 * vnoise(((xz + vec2(0.0, e)) * 2.7 - w) * s);
-  float amp = 0.10 * clamp(1.0 - dist / 3000.0, 0.15, 1.0) * (0.4 + length(uWind) * 0.15);
-  return normalize(vec3((a - b) * amp / e, 1.0, (a - c) * amp / e));
+  // Fade fine ripples once they shrink below a pixel to avoid sparkling noise.
+  float footprint = length(fwidth(xz));
+  float amp = 0.10 * smoothstep(3.0, 0.4, footprint) * (0.4 + length(uWind) * 0.15);
+  // Broad wind swells survive at distance.
+  vec2 big = xz / 40.0 + w * 0.02;
+  float sw = vnoise(big) - vnoise(big + vec2(0.05, 0.0));
+  float sz = vnoise(big) - vnoise(big + vec2(0.0, 0.05));
+  vec3 nb = vec3(sw, 0.0, sz) * 0.5 * smoothstep(60.0, 5.0, footprint);
+  return normalize(vec3((a - b) * amp / e, 1.0, (a - c) * amp / e) + nb);
 }
 
 void main() {
