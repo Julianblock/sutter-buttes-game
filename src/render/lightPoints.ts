@@ -105,6 +105,25 @@ export class LightPoints {
     this.geo.setDrawRange(0, n);
   }
 
+  /** Overwrites light `i` in place (dynamic sets); call commit() afterwards. */
+  write(i: number, x: number, y: number, z: number, r: number, g: number, b: number, size: number) {
+    const p = this.geo.attributes.position.array as Float32Array;
+    const c = this.geo.attributes.aColor.array as Float32Array;
+    p[i * 3] = x;
+    p[i * 3 + 1] = y;
+    p[i * 3 + 2] = z;
+    c[i * 4] = r;
+    c[i * 4 + 1] = g;
+    c[i * 4 + 2] = b;
+    c[i * 4 + 3] = size;
+  }
+
+  commit(count: number) {
+    this.geo.attributes.position.needsUpdate = true;
+    this.geo.attributes.aColor.needsUpdate = true;
+    this.geo.setDrawRange(0, count);
+  }
+
   /** Projection scale so `size` metres maps to pixels. */
   resize(cam: THREE.PerspectiveCamera, heightPx: number) {
     this.material.uniforms.uPixelScale.value = heightPx / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2));
