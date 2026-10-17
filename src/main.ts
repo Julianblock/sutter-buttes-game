@@ -183,6 +183,27 @@ async function boot() {
     }
   };
   const sound = new SoundScape();
+  sound.muted = localStorage.getItem('sb-muted') === '1';
+  const muteBtn = document.createElement('button');
+  muteBtn.className = 'sound-btn';
+  const ICON_ON = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none"/></svg>';
+  const ICON_OFF = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none"/></svg>';
+  const setMuted = (m: boolean) => {
+    sound.setMuted(m);
+    localStorage.setItem('sb-muted', m ? '1' : '0');
+    muteBtn.innerHTML = m ? ICON_OFF : ICON_ON;
+    muteBtn.title = m ? 'Unmute (M)' : 'Mute (M)';
+    muteBtn.classList.toggle('off', m);
+  };
+  setMuted(sound.muted);
+  muteBtn.onclick = (e) => {
+    e.stopPropagation();
+    sound.start();
+    setMuted(!sound.muted);
+    muteBtn.blur();
+    canvas.focus();
+  };
+  ui.append(muteBtn);
   const wake = () => sound.start();
   addEventListener('pointerdown', wake);
   addEventListener('keydown', wake);
@@ -198,7 +219,7 @@ async function boot() {
     if (e.code === 'KeyH') hud.toggleHelp();
     if (e.code === 'KeyT') hud.toggleHidden();
     if (e.code === 'KeyV') sound.call(player.species.id);
-    if (e.code === 'KeyM') sound.setMuted(!sound.muted);
+    if (e.code === 'KeyM') setMuted(!sound.muted);
   });
 
   // Habitat sampled in a ring under the bird drives the ambient soundscape.

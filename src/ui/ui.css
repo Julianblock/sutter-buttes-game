@@ -499,3 +499,40 @@ kbd {
     font-size: 24px;
   }
 }
+
+/* ---------- Sound toggle ---------- */
+.sound-btn {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 40;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--ink);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.2s, color 0.2s;
+}
+.sound-btn:hover {
+  background: var(--glass-strong);
+}
+.sound-btn.off {
+  color: var(--ink-dim);
+}
+.sound-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
