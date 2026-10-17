@@ -7,6 +7,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { CENTER } from './lib/geo.mjs';
 import { buildMosaic } from './lib/tiles.mjs';
+import { buildLandcover, LC } from './lib/landcover.mjs';
 
 const OUT = path.resolve('public/data');
 
@@ -96,6 +97,22 @@ const steps = {
   },
   async imagery() {
     for (const name of Object.keys(REGIONS)) await buildImagery(name);
+  },
+  async landcover() {
+    const { size } = REGIONS.mid;
+    const res = 2048;
+    console.log('landcover/mid');
+    const classes = await buildLandcover(size, res, path.resolve('.cache/cdl'));
+    const counts = {};
+    for (const v of classes) counts[v] = (counts[v] || 0) + 1;
+    const names = Object.fromEntries(Object.entries(LC).map(([k, v]) => [v, k]));
+    for (const [k, n] of Object.entries(counts).sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${names[k].padEnd(12)} ${((100 * n) / classes.length).toFixed(1)}%`);
+    }
+    await sharp(Buffer.from(classes), { raw: { width: res, height: res, channels: 1 } })
+      .png({ compressionLevel: 9 })
+      .toFile(path.join(OUT, 'landcover.png'));
+    await writeMeta({ landcover: { size, res, classes: LC } });
   },
 };
 
