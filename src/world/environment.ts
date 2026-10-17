@@ -46,7 +46,7 @@ export const TIMES: Record<TimePreset, { label: string }> = {
 
 export const WEATHERS: Record<Weather, { label: string; mie: number; cloud: number; fog: number; fogTop: number }> = {
   crisp: { label: 'Crystal Clear (after rain)', mie: 0.45, cloud: 0.12, fog: 0, fogTop: -1000 },
-  clear: { label: 'Clear', mie: 1.0, cloud: 0.04, fog: 0, fogTop: -1000 },
+  clear: { label: 'Clear', mie: 1.5, cloud: 0.04, fog: 0, fogTop: -1000 },
   hazy: { label: 'Valley Haze', mie: 4.0, cloud: 0.0, fog: 0, fogTop: -1000 },
   partly: { label: 'Scattered Clouds', mie: 1.3, cloud: 0.5, fog: 0, fogTop: -1000 },
   overcast: { label: 'Overcast', mie: 2.2, cloud: 0.97, fog: 0, fogTop: -1000 },
