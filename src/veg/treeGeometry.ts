@@ -94,7 +94,7 @@ export function buildTree(detail: 0 | 1 | 2, seed = 1): THREE.BufferGeometry {
   }
 
   // Crown clusters biased toward the outer shell of an oblate ellipsoid.
-  const n = detail === 0 ? 26 : 7;
+  const n = detail === 0 ? 34 : 7;
   const clusterGeo = new THREE.IcosahedronGeometry(1, detail === 0 ? 1 : 0);
   const innerGeo = new THREE.IcosahedronGeometry(1, 0);
   for (let i = 0; i < n; i++) {
@@ -104,11 +104,12 @@ export function buildTree(detail: 0 | 1 | 2, seed = 1): THREE.BufferGeometry {
       const u = r() * 2 - 1;
       const th = r() * Math.PI * 2;
       const s = Math.sqrt(1 - u * u);
-      dir = new THREE.Vector3(s * Math.cos(th), Math.abs(u) * 0.9 - 0.15, s * Math.sin(th));
+      dir = new THREE.Vector3(s * Math.cos(th), Math.abs(u) * 1.0 - 0.3, s * Math.sin(th));
     }
-    const shell = 0.55 + 0.35 * r();
+    // Irregular crown: clusters scattered through a thick shell, some flung out.
+    const shell = detail === 0 ? 0.45 + 0.6 * r() : 0.55 + 0.35 * r();
     const c = new THREE.Vector3(dir.x * crownR.x * shell, crownY + dir.y * crownR.y * shell, dir.z * crownR.z * shell);
-    const cr = (detail === 0 ? 0.24 : 0.4) * (0.8 + 0.4 * r());
+    const cr = (detail === 0 ? 0.21 : 0.4) * (detail === 0 ? 0.65 + 0.7 * r() : 0.8 + 0.4 * r());
     const m = new THREE.Matrix4().compose(c, new THREE.Quaternion().setFromEuler(new THREE.Euler(r() * 3, r() * 3, r() * 3)), new THREE.Vector3(cr, cr * 0.8, cr));
     const k = r() * 10;
     b.addMesh(clusterGeo, m, c, TREE_PART.LEAF, (p) => {
