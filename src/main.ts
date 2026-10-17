@@ -23,6 +23,7 @@ import { Props } from './world/props';
 import { LightPoints } from './render/lightPoints';
 import { Traffic } from './life/traffic';
 import { Roads } from './world/roads';
+import { Wildlife } from './life/wildlife';
 import { createBirdShadowMaterial } from './birds/birdShader';
 import { LoadingScreen } from './ui/loading';
 import { Menu } from './ui/menu';
@@ -89,6 +90,8 @@ async function boot() {
   engine.scene.add(roads.group);
   const traffic = new Traffic(world.osm, heightfield);
   engine.scene.add(traffic.group);
+  const wildlife = new Wildlife(heightfield);
+  engine.scene.add(wildlife.group);
 
   const air = new AirField(heightfield);
   const species = speciesById(settings.bird) ?? SPECIES[0];
@@ -100,6 +103,7 @@ async function boot() {
   const shadow = new ShadowMap();
   trees.addShadowCasters(shadow);
   props.addShadowCasters(shadow);
+  wildlife.addShadowCasters(shadow);
   player.shadowCaster = shadow.addCaster(player.model.geometry, createBirdShadowMaterial(), player.object);
 
   const cam = engine.camera;
@@ -297,6 +301,7 @@ async function boot() {
     lights.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.lights.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.update(dt, cam.position, G.uNight.value);
+    wildlife.update(dt, cam.position, player.object.position);
     shadow.update(engine.renderer, free ? cam.position : player.object.position);
     G.uInvExposure.value = 1 / env.exposure;
     sky.update(cam, env.exposure);
@@ -308,7 +313,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic,
+    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     setMode,
   });
