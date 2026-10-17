@@ -7,7 +7,7 @@ export const propVertex = /* glsl */ `
 uniform vec3 uCamPos;
 in float aPart;    // 0 wall, 1 roof, 2 metal
 in vec4 aT0;       // x, y, z, angle
-in vec4 aT1;       // sx, sy, sz, kind (0 house, 1 shed, 2 silo, 3 tower, 4 hut)
+in vec4 aT1;       // sx, sy, sz, kind (0 house, 1 shed, 2 silo, 3 tower, 4 hut, 5 vehicle)
 in vec4 aWall;     // rgb, lit
 in vec4 aRoof;     // rgb, seed
 #ifdef SHADOW_PASS
@@ -82,7 +82,12 @@ void main() {
   float rough = 0.85;
   vec3 emit = vec3(0.0);
   float kind = vKind;
-  if (vPart > 1.5) {
+  if (kind > 4.5) {
+    // Vehicles: glossy paint, dark glass, rubber.
+    if (vPart > 1.5) { albedo = vec3(0.025); rough = 0.9; }
+    else if (vPart > 0.5) { albedo = vec3(0.02, 0.025, 0.03); rough = 0.08; }
+    else { albedo = vWall.rgb * 0.7; rough = 0.22; }
+  } else if (vPart > 1.5) {
     albedo = vec3(0.55, 0.56, 0.58);
     rough = 0.35;
   } else if (vPart > 0.5) {
@@ -91,7 +96,7 @@ void main() {
     rough = metal ? 0.38 : 0.8;
     if (metal) albedo *= 0.9 + 0.1 * sin(vLocal.x * vScale.x * 6.0);
     else albedo *= 0.85 + 0.3 * vnoise(vLocal.xz * vScale.xz * 1.5);
-  } else if (abs(n.y) < 0.5 && (kind < 0.5 || kind > 3.5)) {
+  } else if (abs(n.y) < 0.5 && (kind < 0.5 || (kind > 3.5 && kind < 4.5))) {
     // Facade with windows: cells ~3 m wide, one storey high.
     vec3 sc = vLocal * vScale;
     float u = abs(vLocalN.x) > abs(vLocalN.z) ? sc.z : sc.x;

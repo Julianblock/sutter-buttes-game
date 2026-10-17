@@ -12,14 +12,14 @@ function hash(n: number) {
   return s - Math.floor(s);
 }
 
-function withPart(g: THREE.BufferGeometry, part: number) {
+export function withPart(g: THREE.BufferGeometry, part: number) {
   const ng = g.index ? g.toNonIndexed() : g;
   ng.setAttribute('aPart', new THREE.Float32BufferAttribute(new Array(ng.attributes.position.count).fill(part), 1));
   ng.deleteAttribute('uv');
   return ng;
 }
 
-function merge(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
+export function merge(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
   let count = 0;
   for (const g of list) count += g.attributes.position.count;
   const pos = new Float32Array(count * 3);
