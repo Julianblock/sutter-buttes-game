@@ -88,7 +88,8 @@ void main() {
     else if (vPart > 0.5) { albedo = vec3(0.02, 0.025, 0.03); rough = 0.08; }
     else { albedo = vWall.rgb * 0.7; rough = 0.22; }
   } else if (vPart > 1.5) {
-    albedo = vec3(0.55, 0.56, 0.58);
+    // Galvanised steel; weathered lattice towers are duller than new sheet.
+    albedo = kind > 2.5 && kind < 3.5 ? vec3(0.36, 0.37, 0.38) : vec3(0.55, 0.56, 0.58);
     rough = 0.35;
   } else if (vPart > 0.5) {
     // Roof: corrugated metal on sheds and silos, shingles elsewhere.
