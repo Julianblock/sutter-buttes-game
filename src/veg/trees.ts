@@ -9,7 +9,7 @@ import { SPECIES_COUNT, treeFragment, treeVertex } from './treeShader';
 export const TREE = { BLUE_OAK: 0, LIVE_OAK: 1, VALLEY_OAK: 2, COTTONWOOD: 3, SHRUB: 4, ALMOND: 5, WALNUT: 6, PRUNE: 7 } as const;
 
 const TILE = 250;
-const LOD0 = 420;
+const LOD0 = 170;
 const LOD1 = 1900;
 const LOD2 = 6500;
 const CAP = [14000, 70000, 90000];
