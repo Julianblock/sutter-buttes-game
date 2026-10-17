@@ -102,7 +102,7 @@ void main() {
   // North-facing slopes stay greener longer.
   float aspectWet = clamp(-n.z * 0.6, 0.0, 0.4);
   float green = clamp(uVeg.x + aspectWet * (1.0 - uVeg.x) * 0.6, 0.0, 1.0);
-  vec3 grass = mix(alb, lush, green * dryness * (1.0 - canopy));
+  vec3 grass = mix(alb, lush, green * mix(0.65, 1.0, dryness) * (1.0 - canopy));
   // Late-season grass goes grey-brown before the first rains.
   grass = mix(grass, grass * vec3(0.92, 0.86, 0.80), uOrchard.w * dryness * (1.0 - green));
   // Bare blue oaks in winter read as grey-brown lace instead of dark crowns.
