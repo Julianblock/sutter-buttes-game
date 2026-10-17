@@ -157,14 +157,14 @@ void main() {
   vec3 night = (starField(eq) + milkyWay(eq)) * uStarBrightness;
   float twinkle = 0.75 + 0.5 * vnoise(eq.xy * 800.0 + uTime * 3.0);
   col += night * Tview * mix(1.0, twinkle, 1.0 - dir.y);
-  col += moonDisk(dir) * Tview * 0.06;
+  col += moonDisk(dir) * Tview * max(uMoonScale, 2e-6) * 1200.0;
 
   // Sodium/LED skyglow from Yuba City (E-SE) and Sacramento (S) near the horizon.
   float hz = exp(-max(dir.y, 0.0) * 22.0);
   vec2 dh = normalize(dir.xz + 1e-5);
   float yuba = pow(max(dot(dh, normalize(vec2(1.0, 0.35))), 0.0), 6.0);
   float sac = pow(max(dot(dh, normalize(vec2(0.15, 1.0))), 0.0), 10.0);
-  col += vec3(1.0, 0.62, 0.32) * (yuba * 0.0016 + sac * 0.0024 + 0.0002) * hz * uNight;
+  col += vec3(1.0, 0.55, 0.25) * (yuba * 0.0018 + sac * 0.0022 + 0.00004) * hz * uNight;
 
   vec4 cl = cloudLayer(dir);
   col = col * (1.0 - cl.a) + cl.rgb;
