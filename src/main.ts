@@ -308,7 +308,9 @@ async function boot() {
     wildlife.update(dt, cam.position, player.object.position);
     flocks.setMonth(env.month);
     flocks.update(dt, cam.position, { x: air.windX, z: air.windZ });
-    shadow.update(engine.renderer, free ? cam.position : player.object.position);
+    const focus = free ? cam.position : player.object.position;
+    props.update(cam.position, focus);
+    shadow.update(engine.renderer, focus);
     G.uInvExposure.value = 1 / env.exposure;
     sky.update(cam, env.exposure);
     engine.render(env.exposure, G.uNight.value, G.uTime.value);
