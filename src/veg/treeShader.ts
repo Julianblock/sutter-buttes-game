@@ -1,6 +1,6 @@
 import { lightingCommon } from '../render/shaders/lighting';
 
-export const SPECIES_COUNT = 5;
+export const SPECIES_COUNT = 8;
 
 export const treeVertex = /* glsl */ `
 #include <common>
@@ -136,7 +136,9 @@ void main() {
     leafC = mix(leafC, uFallTint, clamp((fract(vSeed * 53.1) - 0.5) * 0.6, 0.0, 1.0) * float(vSpecies != 1 && vSpecies != 4));
     // Oak canopy reflects far less than its leaf colour suggests (self-shadowed
     // gaps, waxy dusty leaves): darken and desaturate toward grey-green.
-    leafC = mix(vec3(dot(leafC, vec3(0.3, 0.55, 0.15))), leafC, 0.8) * 0.62;
+    float lum = dot(leafC, vec3(0.3, 0.55, 0.15));
+    // Blossom (near-white crowns) stays bright.
+    leafC = mix(vec3(lum), leafC, 0.8) * mix(0.62, 0.8, smoothstep(0.35, 0.7, lum));
     albedo = mix(uBarkColor[vSpecies] * 0.8, leafC, smoothstep(0.0, 0.5, amount));
     thin = amount;
   } else {

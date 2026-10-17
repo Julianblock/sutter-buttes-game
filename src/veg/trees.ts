@@ -6,7 +6,7 @@ import { LC } from '../world/meta';
 import { buildTree } from './treeGeometry';
 import { SPECIES_COUNT, treeFragment, treeVertex } from './treeShader';
 
-export const TREE = { BLUE_OAK: 0, LIVE_OAK: 1, VALLEY_OAK: 2, COTTONWOOD: 3, SHRUB: 4 } as const;
+export const TREE = { BLUE_OAK: 0, LIVE_OAK: 1, VALLEY_OAK: 2, COTTONWOOD: 3, SHRUB: 4, ALMOND: 5, WALNUT: 6, PRUNE: 7 } as const;
 
 const TILE = 250;
 const LOD0 = 420;
@@ -21,6 +21,9 @@ const LEAF_KF: number[][] = [
   [0.02, 0.02, 0.4, 0.95, 1, 1, 1, 1, 1, 0.9, 0.5, 0.08], // valley oak
   [0.0, 0.0, 0.5, 1, 1, 1, 1, 1, 1, 0.9, 0.45, 0.02], // cottonwood
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // shrubs
+  [0.04, 0.9, 0.95, 1, 1, 1, 1, 1, 1, 0.9, 0.55, 0.1], // almond (Feb = blossom)
+  [0.0, 0.0, 0.05, 0.6, 1, 1, 1, 1, 1, 0.85, 0.4, 0.03], // walnut
+  [0.03, 0.08, 0.9, 1, 1, 1, 1, 1, 1, 0.85, 0.45, 0.06], // prune / peach (Mar = blossom)
 ];
 
 // Leaf colour keyframes: [winter, spring, summer, fall] (sRGB hex).
@@ -30,8 +33,24 @@ const LEAF_COL: string[][] = [
   ['#66625a', '#728f45', '#4f5f34', '#8a7740'],
   ['#706a5e', '#8aa84b', '#5f7a38', '#c99c34'],
   ['#3e4630', '#4a5f33', '#41492f', '#55502f'],
+  ['#5e5850', '#6d8a42', '#55683a', '#8a7a3e'],
+  ['#5e5850', '#7a9a48', '#58703a', '#b39a3c'],
+  ['#5e5850', '#6a8640', '#4f6236', '#94703a'],
 ];
-const BARK = ['#8a857a', '#4c4640', '#5c554c', '#8a8274', '#4a4436'];
+const BARK = ['#8a857a', '#4c4640', '#5c554c', '#8a8274', '#4a4436', '#4a4038', '#8c877c', '#3e3530'];
+
+/** Orchard rows on the survey grid: spacing (m), crown radius, height. */
+const ORCHARD: Record<number, { sp: number; spacing: number; row: number; r: number; h: number }> = {
+  [LC.ALMOND]: { sp: TREE.ALMOND, spacing: 6.4, row: 7.0, r: 2.8, h: 5.4 },
+  [LC.WALNUT]: { sp: TREE.WALNUT, spacing: 9.0, row: 9.0, r: 4.2, h: 9.5 },
+  [LC.FRUIT]: { sp: TREE.PRUNE, spacing: 5.6, row: 6.2, r: 2.5, h: 4.4 },
+};
+
+/** Blossom colour and the month (0 = Jan 1) it peaks, per orchard species. */
+const BLOOM: Record<number, { col: string; peak: number }> = {
+  [TREE.ALMOND]: { col: '#e4d8d8', peak: 1.65 },
+  [TREE.PRUNE]: { col: '#e8d2d8', peak: 2.4 },
+};
 
 function kf(keys: number[], m: number) {
   const i0 = ((Math.floor(m) % 12) + 12) % 12;
@@ -140,6 +159,7 @@ export class Trees {
       let r = rImg * 0.82;
       let h: number;
       const lc = hf.landcover(x, z);
+      if (ORCHARD[lc]) continue;
       if (rImg < 2.7) {
         sp = TREE.SHRUB;
         r = 1.0 + rImg * 0.35 + seed * 0.4;
@@ -160,6 +180,10 @@ export class Trees {
       if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) continue;
       lists[tj * tilesN + ti].push(x, y - 0.35, z, seed * 6.2831, r, h, sp, hash(seed * 17.3));
     }
+    this.plantOrchards(zone, hf, (ti, tj, ...vals) => {
+      if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) return;
+      lists[tj * tilesN + ti].push(...vals);
+    });
     for (let tj = 0; tj < tilesN; tj++) {
       for (let ti = 0; ti < tilesN; ti++) {
         const l = lists[tj * tilesN + ti];
@@ -183,6 +207,32 @@ export class Trees {
     }
   }
 
+  /** Rows of almond, walnut and prune trees filling every orchard land-cover cell. */
+  private plantOrchards(zone: number, hf: Heightfield, add: (ti: number, tj: number, ...v: number[]) => void) {
+    const half = zone / 2;
+    let k = 0;
+    for (const key of Object.keys(ORCHARD)) {
+      const o = ORCHARD[Number(key)];
+      for (let z = -half + o.row / 2; z < half; z += o.row) {
+        for (let x = -half + o.spacing / 2; x < half; x += o.spacing) {
+          if (hf.landcover(x, z) !== Number(key)) continue;
+          const seed = hash(x * 0.137 + z * 0.731);
+          if (seed < 0.03) continue; // missing / replanted trees
+          const y = hf.height(x, z);
+          const r = o.r * (0.85 + seed * 0.3);
+          const h = o.h * (0.9 + hash(seed * 7.7) * 0.2);
+          const ti = Math.floor((x + half) / TILE);
+          const tj = Math.floor((z + half) / TILE);
+          add(ti, tj, x + (seed - 0.5) * 0.4, y - 0.3, z, seed * 6.2831, r, h, o.sp, hash(seed * 17.3));
+          k++;
+        }
+      }
+    }
+    this.orchardCount = k;
+  }
+
+  orchardCount = 0;
+
   /** Seasonal foliage: leaf-out, colour and autumn tint for the given month (0 = Jan 1). */
   setSeason(month: number) {
     const u = this.material.uniforms;
@@ -205,6 +255,11 @@ export class Trees {
         cols[s].r += (c.r * w[k]) / sum;
         cols[s].g += (c.g * w[k]) / sum;
         cols[s].b += (c.b * w[k]) / sum;
+      }
+      const bloom = BLOOM[s];
+      if (bloom) {
+        const b = Math.max(0, 1 - Math.abs(month - bloom.peak) / 0.45);
+        cols[s].lerp(c.set(bloom.col), Math.min(1, b * 1.6));
       }
     }
     (u.uFallTint.value as THREE.Color).set(w[3] / sum > 0.3 ? '#b07a30' : '#5d6a3a');
