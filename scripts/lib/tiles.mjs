@@ -85,6 +85,10 @@ export async function buildMosaic(sourceName, zoom, size) {
   const isHeight = sourceName === 'terrarium';
   const C = isHeight ? 1 : 3;
   const data = isHeight ? new Float32Array(W * H) : new Uint8Array(W * H * 3);
+  if (!isHeight) {
+    // Missing imagery tiles are open Pacific; paint them deep ocean blue.
+    for (let i = 0; i < W * H; i++) data.set([16, 34, 52], i * 3);
+  }
 
   const jobs = [];
   for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) jobs.push([tx, ty]);
@@ -106,7 +110,14 @@ export async function buildMosaic(sourceName, zoom, size) {
         }
       } else {
         const dstRow = ((oy + y) * W + ox) * 3;
-        data.set(px.subarray(srcRow, srcRow + info.width * 3), dstRow);
+        for (let x = 0; x < info.width; x++) {
+          const s = srcRow + x * 3;
+          // Low-zoom imagery encodes open ocean as pure black.
+          if (zoom <= 11 && px[s] + px[s + 1] + px[s + 2] < 8) continue;
+          data[dstRow + x * 3] = px[s];
+          data[dstRow + x * 3 + 1] = px[s + 1];
+          data[dstRow + x * 3 + 2] = px[s + 2];
+        }
       }
     }
   });
