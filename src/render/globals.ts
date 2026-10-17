@@ -19,6 +19,7 @@ export const G = {
   uCloudOffset: { value: new THREE.Vector2() },
   uWind: { value: new THREE.Vector2(2.5, 1.0) },
   uNight: { value: 0 }, // 0 day .. 1 full night, drives emissive lights
+  uInvExposure: { value: 1 }, // emissive sources are authored in display units
   uSeason: { value: new THREE.Vector4(0, 0, 1, 0) }, // winter, spring, summer, fall weights
   uYearPhase: { value: 0.5 }, // 0 = Jan 1 .. 1 = Dec 31
   uTransmittanceLUT: { value: null as THREE.Texture | null },

@@ -14,6 +14,7 @@ uniform vec3 uSunDir;
 uniform vec3 uMoonDir;
 uniform float uMoonScale;
 uniform float uNight;
+uniform float uInvExposure;
 uniform float uFogTop;
 uniform float uFogDensity;
 uniform float uCloudCover;
@@ -144,6 +145,16 @@ float fogDepth(float y0, float y1, float d) {
   if (hi - lo < 0.01) inside = smoothstep(top + 40.0, top - 20.0, lo);
   else inside = clamp((min(hi, top) - lo) / (hi - lo), 0.0, 1.0);
   return uFogDensity * d * inside;
+}
+
+/** Transmittance of the camera-to-point segment (air and tule fog), for emitters. */
+vec3 segmentTransmittance(vec3 wp) {
+  vec3 v = wp - uCamPos;
+  float d = length(v);
+  float dy = v.y / max(d, 1e-3);
+  vec3 tau = RAYLEIGH_SCAT * layerDepth(uCamPos.y, dy, d, RAYLEIGH_H)
+           + vec3(MIE_EXT * uMieScale) * layerDepth(uCamPos.y, dy, d, MIE_H);
+  return exp(-tau - fogDepth(uCamPos.y, wp.y, d));
 }
 
 /** Aerial perspective: attenuates a lit surface and adds in-scattered sky light. */
