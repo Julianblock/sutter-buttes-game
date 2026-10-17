@@ -3,7 +3,7 @@ import * as THREE from 'three';
 // Unit tree: ground at y=0, top at y=1, crown radius 1 in x/z. Instances scale
 // x/z by crown radius and y by height in the vertex shader.
 
-export const TREE_PART = { BARK: 0, LEAF: 1 } as const;
+export const TREE_PART = { BARK: 0, LEAF: 1, INNER: 2 } as const;
 
 function rng(seed: number) {
   let s = seed >>> 0;
@@ -83,12 +83,12 @@ export function buildTree(detail: 0 | 1 | 2, seed = 1): THREE.BufferGeometry {
   const limbs = detail === 0 ? 5 : 2;
   for (let i = 0; i < limbs; i++) {
     const a = (i / limbs) * Math.PI * 2 + r() * 0.8;
-    const out = 0.45 + r() * 0.3;
-    const end = new THREE.Vector3(Math.cos(a) * out, crownY + (r() - 0.3) * 0.18, Math.sin(a) * out);
+    const out = 0.32 + r() * 0.22;
+    const end = new THREE.Vector3(Math.cos(a) * out, crownY + (r() - 0.5) * 0.12, Math.sin(a) * out);
     limb(b, trunkTop, end, 0.045, 0.018, detail === 0 ? 5 : 3);
     if (detail === 0) {
       const a2 = a + (r() - 0.5) * 1.2;
-      const end2 = end.clone().add(new THREE.Vector3(Math.cos(a2) * 0.25, 0.12 + r() * 0.1, Math.sin(a2) * 0.25));
+      const end2 = end.clone().add(new THREE.Vector3(Math.cos(a2) * 0.14, 0.06 + r() * 0.06, Math.sin(a2) * 0.14));
       limb(b, end, end2, 0.018, 0.008, 3);
     }
   }
@@ -96,6 +96,7 @@ export function buildTree(detail: 0 | 1 | 2, seed = 1): THREE.BufferGeometry {
   // Crown clusters biased toward the outer shell of an oblate ellipsoid.
   const n = detail === 0 ? 26 : 7;
   const clusterGeo = new THREE.IcosahedronGeometry(1, detail === 0 ? 1 : 0);
+  const innerGeo = new THREE.IcosahedronGeometry(1, 0);
   for (let i = 0; i < n; i++) {
     let dir: THREE.Vector3;
     if (i === 0) dir = new THREE.Vector3(0, 0.7, 0);
@@ -114,6 +115,11 @@ export function buildTree(detail: 0 | 1 | 2, seed = 1): THREE.BufferGeometry {
       const w = 1 + 0.18 * Math.sin(p.x * 5 + k) * Math.sin(p.y * 4 + k * 1.3) * Math.sin(p.z * 6 - k);
       p.multiplyScalar(w);
     });
+    // Dark inner foliage seen through gaps between the outer leaves.
+    if (detail === 0) {
+      const mi = new THREE.Matrix4().compose(c, new THREE.Quaternion(), new THREE.Vector3(cr * 0.72, cr * 0.58, cr * 0.72));
+      b.addMesh(innerGeo, mi, c, TREE_PART.INNER);
+    }
   }
   return b.build();
 }
