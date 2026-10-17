@@ -21,6 +21,7 @@ import { Trees } from './veg/trees';
 import { ShadowMap } from './render/shadows';
 import { Props } from './world/props';
 import { PowerLines } from './world/powerLines';
+import { Grass } from './veg/grass';
 import { LightPoints } from './render/lightPoints';
 import { Traffic } from './life/traffic';
 import { Roads } from './world/roads';
@@ -85,6 +86,8 @@ async function boot() {
   engine.scene.add(trees.group);
   const seasonMonth = () => env.month - 1 + (env.day - 1) / 30;
   trees.setSeason(seasonMonth());
+  const grass = new Grass(terrain.material.uniforms, heightfield);
+  engine.scene.add(grass.group);
 
   loading.progress('Raising barns and broadcast towers', 0.97);
   const power = new PowerLines(world.osm, heightfield);
@@ -357,6 +360,7 @@ async function boot() {
     terrainShadow.update();
     terrain.update(cam);
     trees.update(cam);
+    grass.update(cam.position, seasonMonth());
     lights.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.lights.resize(cam, window.innerHeight * engine.pixelRatio);
     power.resize(cam, window.innerHeight * engine.pixelRatio);
@@ -378,7 +382,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power,
+    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     setMode,
   });
