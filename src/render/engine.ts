@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { createGradePass } from './gradePass';
 
 function supportsReversedDepth(): boolean {
   const c = document.createElement('canvas');
@@ -20,6 +20,7 @@ export class Engine {
   readonly composer: EffectComposer;
   readonly bloom: UnrealBloomPass;
   readonly exposurePass: ShaderPass;
+  readonly grade: ShaderPass;
   pixelRatio = Math.min(window.devicePixelRatio, 2);
 
   constructor(canvas: HTMLCanvasElement) {
@@ -34,7 +35,7 @@ export class Engine {
     });
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
-    this.renderer.toneMapping = THREE.AgXToneMapping;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 0.3;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.autoClear = true;
@@ -57,7 +58,8 @@ export class Engine {
     this.composer.addPass(this.exposurePass);
     this.bloom = new UnrealBloomPass(size.clone().multiplyScalar(0.5), 0.3, 0.6, 2.2);
     this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
+    this.grade = createGradePass();
+    this.composer.addPass(this.grade);
 
     window.addEventListener('resize', () => this.resize());
   }
@@ -73,8 +75,10 @@ export class Engine {
     this.composer.setSize(w, h);
   }
 
-  render(exposure: number) {
+  render(exposure: number, night = 0, time = 0) {
     this.exposurePass.uniforms.uExposure.value = exposure;
+    this.grade.uniforms.uNight.value = night;
+    this.grade.uniforms.uTime.value = time % 100;
     this.renderer.toneMappingExposure = 1;
     this.composer.render();
   }

@@ -82,7 +82,7 @@ async function boot() {
     terrainShadow.update();
     terrain.update(cam);
     sky.update(cam, env.exposure);
-    engine.render(env.exposure);
+    engine.render(env.exposure, G.uNight.value, G.uTime.value);
     schedule(frame);
   }
   // Background/headless tabs throttle rAF; ?timer keeps the loop alive for capture.
