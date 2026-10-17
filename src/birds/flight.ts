@@ -58,6 +58,7 @@ export class FlightModel {
   private hopTimer = 0;
   private takeoffBoost = 0;
   private stallTimer = 0;
+  private gammaRate = 0;
 
   constructor(public species: Species, private hf: Heightfield, private air: AirField) {}
 
@@ -127,8 +128,12 @@ export class FlightModel {
     const nMax = Math.min(4.5, (V / vs) ** 2);
     const neutral = Math.cos(this.gamma) / Math.max(Math.cos(this.phi), 0.25);
     let n = neutral + inp.pitch * (inp.pitch > 0 ? 2.4 : 1.4) * agility;
-    // Gentle path-levelling when hands-off so the bird doesn't plough in.
-    if (Math.abs(inp.pitch) < 0.02) n += clamp(-this.gamma * 0.6, -0.3, 0.3);
+    // Hands-off trim: settle toward best-glide speed on a shallow path, like a
+    // trimmed glider (too slow → nose drops, too fast → zoom up).
+    if (Math.abs(inp.pitch) < 0.02 && inp.tuck < 0.1) {
+      const trim = clamp((0.9 * (V - vStar)) / vStar, -0.45, 0.45) - 0.5 * this.gamma - 0.6 * this.gammaRate;
+      n += clamp(trim, -0.6, 0.6);
+    }
     n += inp.brake * 0.6;
     const stalled = n > nMax;
     n = clamp(n, -1, nMax);
@@ -150,6 +155,7 @@ export class FlightModel {
     // Hovering kites/owls: flapping holds altitude at near-zero airspeed.
     if (f.hover && inp.flap > 0 && V < vs * 1.2) dGamma += (g / V) * this.flapAmount * 0.9;
     this.gamma = clamp(this.gamma + dGamma * dt, -1.45, 1.35);
+    this.gammaRate = dGamma;
     const dPsi = (-g * n * Math.sin(this.phi)) / (V * Math.max(Math.cos(this.gamma), 0.2));
     this.psi += (dPsi + inp.yaw * 0.35) * dt;
     this.alpha = approach(this.alpha, clamp(0.04 + 0.12 * (n / Math.max(nMax, 0.3)), -0.1, 0.35), 5, dt);
