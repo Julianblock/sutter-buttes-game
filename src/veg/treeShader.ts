@@ -25,6 +25,7 @@ out vec3 vClusterN;
 flat out int vSpecies;
 flat out float vSeed;
 flat out float vLeaf;
+flat out vec2 vSize;
 
 void main() {
   vec3 local = position;
@@ -69,6 +70,7 @@ void main() {
   vSpecies = sp;
   vSeed = aInst1.w;
   vLeaf = leaf;
+  vSize = vec2(r, h);
 #ifdef SHADOW_PASS
   vShadowZ = (uShadowMatrix * vec4(world, 1.0)).z;
 #else
@@ -95,6 +97,7 @@ in vec3 vClusterN;
 flat in int vSpecies;
 flat in float vSeed;
 flat in float vLeaf;
+flat in vec2 vSize;
 #ifdef SHADOW_PASS
 in float vShadowZ;
 #endif
@@ -103,6 +106,7 @@ out vec4 outColor;
 void main() {
   #include <logdepthbuf_fragment>
 #ifdef SHADOW_PASS
+  if (vLeaf > 1.5) discard;
   if (vLeaf > 0.5) {
     float amount = uLeafAmount[vSpecies];
     float nz = vnoise3(vLocal * 9.0 + vSeed * 13.0);
@@ -129,9 +133,39 @@ void main() {
     float dist = length(uCamPos - vWorld);
     float edge = 1.0 - abs(dot(normalize(vClusterN), V));
     float leafy = vnoise3(vLocal * 46.0 + vSeed * 3.0);
-    if (dist < 900.0 && edge > 0.5 && leafy < (edge - 0.5) * 2.4 * smoothstep(900.0, 500.0, dist)) discard;
+    bool inner = vLeaf > 1.5;
+    if (!inner && dist < 900.0 && edge > 0.5 && leafy < (edge - 0.5) * 2.4 * smoothstep(900.0, 500.0, dist)) discard;
     vec3 leafC = uLeafColor[vSpecies] * (0.82 + 0.36 * fract(vSeed * 91.7));
     leafC *= 0.8 + 0.4 * nz;
+    // Individual leaf clumps up close: gaps between them, each tilted and toned
+    // differently, fading out once a clump shrinks below a few pixels.
+    vec3 pm = vLocal * vec3(vSize.x, vSize.y, vSize.x);
+    const float L = 0.12;
+    float strength = inner ? 0.0 : smoothstep(L * 1.2, L * 0.35, length(fwidth(pm)));
+    if (strength > 0.0) {
+      vec3 q = pm / L + vSeed * 17.0;
+      vec3 ci = floor(q);
+      vec3 o = step(0.5, fract(q)) - 1.0;
+      float best = 9.0;
+      vec3 bestId = ci;
+      for (int k = 0; k < 8; k++) {
+        vec3 c = ci + o + vec3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
+        vec3 fp = c + vec3(hash13(c), hash13(c + 19.1), hash13(c + 47.7));
+        vec3 dv = q - fp;
+        // Elliptical leaf with a random midrib direction and size.
+        vec3 axis = normalize(vec3(hash13(c + 2.9), hash13(c + 6.1), hash13(c + 8.3)) - 0.5);
+        float al = dot(dv, axis);
+        float sz = 0.5 + 0.35 * hash13(c + 11.3);
+        float dd = sqrt(dot(dv, dv) + 2.2 * al * al) / sz;
+        if (dd < best) { best = dd; bestId = c; }
+      }
+      float cut = mix(1.15, 0.85, edge);
+      if (best > mix(9.0, cut, strength)) discard;
+      vec3 leafN = vec3(hash13(bestId + 5.1), hash13(bestId + 7.7), hash13(bestId + 9.9)) - 0.5;
+      n = normalize(n + leafN * 1.1 * strength);
+      leafC *= mix(1.0, 0.8 + 0.4 * hash13(bestId + 3.3), strength);
+    }
+    if (inner) leafC *= 0.55;
     // Per-tree autumn variation (some trees turn earlier).
     leafC = mix(leafC, uFallTint, clamp((fract(vSeed * 53.1) - 0.5) * 0.6, 0.0, 1.0) * float(vSpecies != 1 && vSpecies != 4));
     // Oak canopy reflects far less than its leaf colour suggests (self-shadowed
@@ -139,11 +173,11 @@ void main() {
     float lum = dot(leafC, vec3(0.3, 0.55, 0.15));
     // Blossom (near-white crowns) stays bright.
     leafC = mix(vec3(lum), leafC, 0.8) * mix(0.62, 0.8, smoothstep(0.35, 0.7, lum));
-    albedo = mix(uBarkColor[vSpecies] * 0.8, leafC, smoothstep(0.0, 0.5, amount));
+    albedo = mix(uBarkColor[vSpecies] * 0.5, leafC, smoothstep(0.0, 0.5, amount));
     thin = amount;
   } else {
     float bn = vnoise3(vWorld * vec3(2.0, 0.4, 2.0));
-    albedo = uBarkColor[vSpecies] * (0.75 + 0.5 * bn);
+    albedo = uBarkColor[vSpecies] * 0.55 * (0.75 + 0.5 * bn);
   }
 
   float shadow = shadowAt(vWorld + n * 0.3, 0.002);
