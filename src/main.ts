@@ -337,7 +337,9 @@ async function boot() {
   const clock = new THREE.Clock();
   let lastMie = -1;
   function frame() {
-    const dt = Math.min(clock.getDelta(), 0.1);
+    const rawDt = clock.getDelta();
+    const dt = Math.min(rawDt, 0.1);
+    if (!params.has('timer')) engine.adapt(rawDt);
     G.uTime.value += dt;
     env.apply(dt);
 

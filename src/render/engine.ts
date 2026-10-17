@@ -21,7 +21,12 @@ export class Engine {
   readonly bloom: UnrealBloomPass;
   readonly exposurePass: ShaderPass;
   readonly grade: ShaderPass;
-  pixelRatio = Math.min(window.devicePixelRatio, 2);
+  /** Upper bound for adaptive resolution; the live ratio floats below it. */
+  maxPixelRatio = Math.min(window.devicePixelRatio, 1.5);
+  minPixelRatio = 0.5;
+  pixelRatio = this.maxPixelRatio;
+  private frameMs = 16;
+  private adaptCooldown = 2;
 
   constructor(canvas: HTMLCanvasElement) {
     const reversed = supportsReversedDepth();
@@ -73,6 +78,23 @@ export class Engine {
     this.renderer.setSize(w, h, false);
     this.composer.setPixelRatio(this.pixelRatio);
     this.composer.setSize(w, h);
+  }
+
+  /** Dynamic resolution: trade pixels for frame rate, aiming for ~40-60 fps. */
+  adapt(dt: number) {
+    if (dt <= 0 || dt >= 0.25) return;
+    this.frameMs += (dt * 1000 - this.frameMs) * 0.08;
+    this.adaptCooldown -= dt;
+    if (this.adaptCooldown > 0) return;
+    let pr = this.pixelRatio;
+    if (this.frameMs > 25) pr *= 0.88;
+    else if (this.frameMs < 15) pr *= 1.06;
+    pr = Math.min(this.maxPixelRatio, Math.max(this.minPixelRatio, pr));
+    if (Math.abs(pr - this.pixelRatio) > 0.01) {
+      this.pixelRatio = pr;
+      this.resize();
+      this.adaptCooldown = 1.2;
+    }
   }
 
   render(exposure: number, night = 0, time = 0) {
