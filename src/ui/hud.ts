@@ -50,6 +50,29 @@ export class Hud {
     <tr><td><kbd>Esc</kbd></td><td>Menu</td></tr>
     </table><p style="font:300 12px/1.6 var(--sans);color:var(--ink-dim);margin:16px 0 0;max-width:380px">
     Pass Road climbs right through the middle of the Buttes. Off the asphalt the truck slows in grass and orchards, and bogs down in flooded rice.</p></div>`;
+  private flyTouch =
+    `<div class="box"><h2>Flying</h2><table>
+    <tr><td>Left thumb</td><td>Push up to dive, pull down to climb, sideways to bank</td></tr>
+    <tr><td>Flap</td><td>Hold to flap · tap to take off when perched</td></tr>
+    <tr><td>Dive</td><td>Tuck the wings and stoop</td></tr>
+    <tr><td>Flare</td><td>Air-brake · land gently</td></tr>
+    <tr><td>Sprint · Call</td><td>Hard flapping · your bird's call</td></tr>
+    <tr><td>Drag the sky</td><td>Look around · pinch to zoom</td></tr>
+    <tr><td>Camera · Drive</td><td>Change view · land and take the pickup</td></tr>
+    </table><p style="font:300 12px/1.6 var(--sans);color:var(--ink-dim);margin:16px 0 0;max-width:380px">
+    Soar like the locals: circle in thermals over sunny fields (the vario turns green), or ride ridge lift along the windward slopes of the Buttes. Tap to close.</p></div>`;
+  private driveTouch =
+    `<div class="box"><h2>Driving</h2><table>
+    <tr><td>Left thumb</td><td>Steer · push up for gas, down to brake</td></tr>
+    <tr><td>Gas · Brake</td><td>Pedals · brake again to reverse when stopped</td></tr>
+    <tr><td>Handbrake</td><td>Slide the back end round</td></tr>
+    <tr><td>Horn · Lights</td><td>Honk · headlights</td></tr>
+    <tr><td>Drag the view</td><td>Look around</td></tr>
+    <tr><td>Camera · Fly</td><td>Cockpit, chase or hood view · get out and fly</td></tr>
+    </table><p style="font:300 12px/1.6 var(--sans);color:var(--ink-dim);margin:16px 0 0;max-width:380px">
+    Pass Road climbs right through the middle of the Buttes. Tap to close.</p></div>`;
+  /** Phones and tablets: describe the on-screen controls instead of keys. */
+  touch = false;
   private place = el('place fade', '<div class="t"></div><div class="s"></div>');
   private compass = el('compass', '<div class="tape"></div>');
   private chip = el('status-chip', 'Thermal');
@@ -70,6 +93,7 @@ export class Hud {
     const inst = el('instruments');
     inst.append(this.alt, this.spd, this.vario, this.msl);
     this.root.append(this.place, this.compass, this.chip, inst, this.keys);
+    this.help.addEventListener('pointerdown', () => this.toggleHelp(false));
     this.setDriving(false);
     this.tape = this.compass.querySelector('.tape')!;
     // Three copies of the 16-point rose so the tape can wrap seamlessly.
@@ -80,10 +104,17 @@ export class Hud {
 
   private driving: boolean | null = null;
 
+  useTouch() {
+    this.touch = true;
+    const d = !!this.driving;
+    this.driving = null;
+    this.setDriving(d);
+  }
+
   setDriving(d: boolean) {
     if (d === this.driving) return;
     this.driving = d;
-    this.help.innerHTML = d ? this.driveHelp : this.flyHelp;
+    this.help.innerHTML = this.touch ? (d ? this.driveTouch : this.flyTouch) : d ? this.driveHelp : this.flyHelp;
     this.keys.innerHTML = `<kbd>H</kbd> controls · <kbd>C</kbd> camera · <kbd>G</kbd> ${d ? 'fly' : 'drive'} · <kbd>Esc</kbd> menu`;
     this.vario.classList.toggle('vario', !d);
     this.lastPlace = '';

@@ -603,3 +603,293 @@ kbd {
   color: var(--accent);
   margin-top: 12px;
 }
+
+/* ---------- Touch controls ---------- */
+.touch {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
+  transition: opacity 0.4s;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.touch.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+.t-zone {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 42%;
+  height: 72%;
+  pointer-events: auto;
+  touch-action: none;
+}
+.t-base {
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  margin: -66px 0 0 -66px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 70%);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+.t-zone.active .t-base {
+  opacity: 1;
+}
+.t-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(244, 239, 230, 0.32);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+}
+.t-hint {
+  position: absolute;
+  left: max(24px, env(safe-area-inset-left));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  font: 500 9.5px/1 var(--sans);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(244, 239, 230, 0.45);
+  transition: opacity 0.3s;
+}
+.t-zone.active .t-hint {
+  opacity: 0;
+}
+.t-pad {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: 230px;
+  height: 200px;
+}
+.t-act,
+.t-btn {
+  all: unset;
+  position: absolute;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  pointer-events: auto;
+  touch-action: none;
+  color: var(--ink);
+  font: 600 10.5px/1.15 var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  background: rgba(16, 18, 20, 0.38);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 0.1s, transform 0.1s;
+}
+.t-act.on {
+  background: rgba(232, 180, 106, 0.45);
+  border-color: rgba(244, 215, 164, 0.9);
+  transform: scale(0.94);
+}
+/* Arc of buttons around the big one, sized for thumbs. */
+.t-act {
+  width: 66px;
+  height: 66px;
+}
+.t-act.big {
+  width: 96px;
+  height: 96px;
+  right: 0;
+  bottom: 0;
+  font-size: 12px;
+  background: rgba(232, 180, 106, 0.2);
+  border-color: rgba(244, 215, 164, 0.55);
+}
+.t-act.small {
+  width: 50px;
+  height: 50px;
+  font-size: 8.5px;
+}
+.t-act:nth-child(2) { right: 108px; bottom: 6px; }
+.t-act:nth-child(3) { right: 70px; bottom: 102px; }
+.t-act:nth-child(4) { right: 0; bottom: 112px; }
+.t-act:nth-child(5) { right: 160px; bottom: 92px; }
+.t-top {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(66px, calc(env(safe-area-inset-right) + 54px));
+  display: flex;
+  gap: 8px;
+}
+.t-btn {
+  position: static;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.t-btn.wide {
+  width: auto;
+  padding: 0 14px;
+  font-size: 9.5px;
+}
+.t-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.t-rotate {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translateX(-50%);
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: var(--glass-strong);
+  font: 400 13px/1.4 var(--sans);
+  color: var(--ink-dim);
+  text-align: center;
+  width: max-content;
+  max-width: 80vw;
+}
+@media (orientation: portrait) {
+  .t-rotate {
+    display: block;
+    animation: t-fade 0.6s 6s forwards;
+  }
+  .t-pad {
+    transform: scale(0.85);
+    transform-origin: bottom right;
+  }
+}
+@keyframes t-fade {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* Touch layout: keep thumbs clear of the HUD, and drop keyboard hints. */
+body.touch #scene {
+  touch-action: none;
+}
+body.touch {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+body.touch .keys {
+  display: none;
+}
+body.touch .instruments {
+  bottom: auto;
+  top: max(54px, calc(env(safe-area-inset-top) + 46px));
+  gap: 14px;
+  padding: 7px 14px;
+  transform: translateX(-50%) scale(0.78);
+  transform-origin: top center;
+}
+body.touch .compass {
+  top: max(16px, env(safe-area-inset-top));
+  width: min(260px, 24vw);
+}
+body.touch .status-chip {
+  top: auto;
+  bottom: 230px;
+  right: max(24px, env(safe-area-inset-right));
+}
+body.touch .place {
+  left: max(20px, env(safe-area-inset-left));
+  top: max(16px, env(safe-area-inset-top));
+}
+body.touch .place .t {
+  font-size: 24px;
+}
+body.touch .help .box {
+  min-width: 0;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 20px 22px;
+}
+body.touch .discovery {
+  top: max(14px, env(safe-area-inset-top));
+}
+body.touch .sound-btn {
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+}
+
+/* Short landscape phone screens: compact menu. */
+@media (max-height: 520px) {
+  .menu .panel {
+    padding: 14px max(20px, env(safe-area-inset-left)) 10px;
+    width: min(440px, 62vw);
+  }
+  .menu .title {
+    font-size: 28px;
+    margin: 2px 0 2px;
+  }
+  .menu .lede,
+  .menu .eyebrow {
+    display: none;
+  }
+  .tabs {
+    margin: 8px 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs button {
+    padding: 10px 8px;
+    flex: none;
+  }
+  .foot {
+    padding-top: 8px;
+  }
+  .cta {
+    padding: 13px 22px;
+  }
+  .cta.alt {
+    padding: 12px 18px;
+  }
+  .foot .hint {
+    display: none;
+  }
+  .discovery {
+    padding: 12px 18px 10px;
+  }
+  .discovery .t {
+    font-size: 22px;
+    margin: 6px 0 4px;
+  }
+  .discovery .x {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+}
+@media (max-width: 720px) {
+  .tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs button {
+    flex: none;
+  }
+}
