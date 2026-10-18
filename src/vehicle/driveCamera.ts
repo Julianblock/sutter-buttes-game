@@ -21,6 +21,7 @@ export class DriveCamera {
   private init = false;
   private fov = 72;
   private lastVel = new THREE.Vector3();
+  shake = 0;
 
   constructor(private cam: THREE.PerspectiveCamera, private hf: Heightfield) {}
 
@@ -98,6 +99,14 @@ export class DriveCamera {
       cam.up.set(0, 1, 0);
       this.setFov((this.view === 'hood' ? 66 : 74) + Math.min(speed * 0.18, 10), dt);
       cam.near = 0.08;
+    }
+    if (this.shake > 0) {
+      const s = this.shake * 0.06;
+      cam.position.x += (Math.random() - 0.5) * s;
+      cam.position.y += (Math.random() - 0.5) * s;
+      cam.position.z += (Math.random() - 0.5) * s;
+      cam.rotateZ((Math.random() - 0.5) * s * 0.3);
+      this.shake = Math.max(0, this.shake - dt * 3);
     }
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
