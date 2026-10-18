@@ -349,6 +349,23 @@ export class Environment {
     this.exposure = this.computeExposure(sunAlt, G.uMoonScale.value, w.cloud);
   }
 
+  /**
+   * Exposure under a thick deck: anchored to midday rain, and only partly
+   * adapting (power 0.6) so low-sun overcast stays dim and moody.
+   */
+  private deckExposure(sunAlt: number): number {
+    const sunY = Math.max(Math.sin(sunAlt * RAD), 0.02);
+    // Kasten-Young air mass → rough luminous transmittance of the clear air.
+    const alt = Math.max(sunAlt, 1.15);
+    const airMass = 1 / (Math.sin(alt * RAD) + 0.50572 * Math.pow(alt + 6.07995, -1.6364));
+    const T = Math.exp(-0.12 * airMass);
+    const deckT = THREE.MathUtils.lerp(0.3, 0.12, this.rain) + this.snowFall * 0.08;
+    const E = T * sunY * deckT * (1 + 0.8 * this.snowCover);
+    const ref = 0.84 * 0.95 * 0.183;
+    // Like a real meter, hold bright snowfields down toward mid-grey.
+    return 1.05 * (1 - 0.35 * this.rain) * (1 - 0.45 * this.snowCover) * Math.pow(ref / E, 0.6);
+  }
+
   private computeExposure(sunAlt: number, moonScale: number, cloud: number): number {
     const keys: [number, number][] = [
       [-90, 900],
@@ -374,13 +391,10 @@ export class Environment {
     }
     if (sunAlt < -10) e *= THREE.MathUtils.lerp(1.6, 0.55, Math.min(1, moonScale / 9e-5));
     if (sunAlt > 0) e *= (1 + cloud * 0.9) * (1 - 0.2 * this.rain);
-    // Auto-exposure opens up under a rain / snow deck (matches deckTransmission()).
+    // Under a rain / snow deck the camera meters the deck's diffuse light
+    // instead (mirrors deckIrradiance() in the shaders).
     const deck = THREE.MathUtils.smoothstep(Math.max(this.rain, this.snowFall), 0, 0.2);
-    if (deck > 0 && sunAlt > -6) {
-      const deckT = THREE.MathUtils.lerp(0.3, 0.12, this.rain) + this.snowFall * 0.08;
-      // Storms are left darker than a grey drizzle.
-      e *= THREE.MathUtils.lerp(1, (0.85 / deckT) * (1 - 0.35 * this.rain), deck);
-    }
+    if (deck > 0) e = THREE.MathUtils.lerp(e, Math.max(e, this.deckExposure(sunAlt)), deck);
     return e;
   }
 }
