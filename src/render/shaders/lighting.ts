@@ -95,7 +95,7 @@ vec3 deckIrradiance() {
   vec3 E = Es + Em;
   E = mix(E, vec3(dot(E, vec3(0.2126, 0.7152, 0.0722))), 0.75);
   // Light ping-pongs between fresh snowpack and the cloud base.
-  return E * deckTransmission() * (1.0 + 0.8 * uSnowCover) * vec3(0.93, 0.96, 1.0);
+  return E * deckTransmission() * (1.0 + 0.4 * uSnowCover) * vec3(0.93, 0.96, 1.0);
 }
 
 /** CIE overcast sky: zenith three times brighter than the horizon. */
