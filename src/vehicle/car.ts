@@ -18,18 +18,52 @@ export const emptyDriveInput = (): DriveInput => ({ throttle: 0, brake: 0, steer
 
 export interface Surface {
   name: string;
+  /** What the HUD calls it once the weather has had its way. */
+  label: string;
   grip: number; // friction coefficient
   roll: number; // rolling resistance (fraction of g)
   top: number; // practical top speed (m/s)
   rough: number; // body shake
 }
 
-const PAVED: Surface = { name: 'paved', grip: 1.0, roll: 0.012, top: 42, rough: 0.02 };
-const GRAVEL: Surface = { name: 'gravel', grip: 0.75, roll: 0.03, top: 30, rough: 0.25 };
-const FIELD: Surface = { name: 'grass', grip: 0.68, roll: 0.06, top: 24, rough: 0.55 };
-const ORCHARD: Surface = { name: 'orchard', grip: 0.62, roll: 0.08, top: 18, rough: 0.75 };
-const MUD: Surface = { name: 'mud', grip: 0.38, roll: 0.22, top: 9, rough: 0.4 };
-const WATER: Surface = { name: 'water', grip: 0.3, roll: 0.7, top: 3, rough: 0.2 };
+const PAVED: Surface = { name: 'paved', label: 'paved', grip: 1.0, roll: 0.012, top: 42, rough: 0.02 };
+const GRAVEL: Surface = { name: 'gravel', label: 'gravel', grip: 0.75, roll: 0.03, top: 30, rough: 0.25 };
+const FIELD: Surface = { name: 'grass', label: 'grass', grip: 0.68, roll: 0.06, top: 24, rough: 0.55 };
+const ORCHARD: Surface = { name: 'orchard', label: 'orchard', grip: 0.62, roll: 0.08, top: 18, rough: 0.75 };
+const MUD: Surface = { name: 'mud', label: 'mud', grip: 0.38, roll: 0.22, top: 9, rough: 0.4 };
+const WATER: Surface = { name: 'water', label: 'water', grip: 0.3, roll: 0.7, top: 3, rough: 0.2 };
+
+/**
+ * Weather on a surface: rain makes pavement slick (aquaplaning on standing water
+ * at speed) and turns fields to mud; snow cuts grip to packed-snow levels and
+ * drags at the tyres off-road.
+ */
+function weathered(s: Surface, wet: number, snow: number, speed: number): Surface {
+  if (wet < 0.02 && snow < 0.02) return s;
+  let { grip, roll, top, rough, label } = s;
+  const paved = s === PAVED;
+  if (s === FIELD || s === ORCHARD) {
+    grip *= 1 - 0.35 * wet;
+    roll += 0.1 * wet;
+    top *= 1 - 0.35 * wet;
+    if (wet > 0.5) label = s === FIELD ? 'muddy grass' : 'muddy orchard';
+  } else if (s === GRAVEL) {
+    grip *= 1 - 0.12 * wet;
+    roll += 0.02 * wet;
+  } else if (paved) {
+    grip *= 1 - 0.28 * wet;
+    if (wet > 0.3) label = 'wet road';
+    if (wet > 0.6) grip *= 1 - THREE.MathUtils.clamp((Math.abs(speed) - 24) / 18, 0, 0.55) * ((wet - 0.6) / 0.4);
+  }
+  if (snow > 0.05 && s !== WATER) {
+    grip *= 1 - (paved ? 0.62 : 0.5) * snow;
+    roll += (paved ? 0.02 : 0.09) * snow;
+    top *= 1 - (paved ? 0.3 : 0.45) * snow;
+    rough *= 1 - 0.5 * snow;
+    if (snow > 0.3) label = paved ? 'snowy road' : s === MUD ? 'slush' : 'snow';
+  }
+  return { name: s.name, label, grip, roll, top, rough };
+}
 
 const G = 9.81;
 const GEARS = [0, 8, 15, 23, 32, 60];
@@ -58,7 +92,12 @@ export class CarPhysics {
   heave = 0;
   braking = 0;
   slip = 0;
+  /** Ground type under the truck, and how it behaves in today's weather. */
+  base: Surface = PAVED;
   surface: Surface = PAVED;
+  /** Ground wetness and snow cover 0..1 (fed from the environment). */
+  wet = 0;
+  snow = 0;
   road: RoadHit | null = null;
   /** Speed of the latest collision (m/s), decaying; drives shake and sound. */
   impact = 0;
@@ -105,23 +144,25 @@ export class CarPhysics {
     this.bodyPitch = this.bodyRoll = this.heave = 0;
     this.pitchV = this.rollV = 0;
     this.sampleSurface();
-    this.roadLift = this.surface === PAVED ? 0.15 : 0;
+    this.roadLift = this.base === PAVED ? 0.15 : 0;
     this.updatePose(0);
   }
 
   private sampleSurface() {
+    this.base = this.groundType();
+    this.surface = weathered(this.base, this.wet, this.snow, this.speed);
+  }
+
+  private groundType(): Surface {
     const { x, z } = this.pos;
     this.road = this.roads.nearest(x, z, 25);
-    if (this.road && this.road.dist < this.road.halfWidth + 0.6) {
-      this.surface = this.road.kind === 'track' ? GRAVEL : PAVED;
-      return;
-    }
+    if (this.road && this.road.dist < this.road.halfWidth + 0.6) return this.road.kind === 'track' ? GRAVEL : PAVED;
     const lc = this.hf.landcover(x, z);
-    if (lc === LC.WATER) this.surface = WATER;
-    else if (lc === LC.RICE || lc === LC.WETLAND) this.surface = MUD;
-    else if (lc === LC.WALNUT || lc === LC.ALMOND || lc === LC.FRUIT) this.surface = ORCHARD;
-    else if (lc >= LC.URBAN_LOW && lc <= LC.URBAN_HIGH) this.surface = GRAVEL;
-    else this.surface = FIELD;
+    if (lc === LC.WATER) return WATER;
+    if (lc === LC.RICE || lc === LC.WETLAND) return MUD;
+    if (lc === LC.WALNUT || lc === LC.ALMOND || lc === LC.FRUIT) return ORCHARD;
+    if (lc >= LC.URBAN_LOW && lc <= LC.URBAN_HIGH) return GRAVEL;
+    return FIELD;
   }
 
   update(dt: number, inp: DriveInput) {
@@ -261,7 +302,7 @@ export class CarPhysics {
       this.heave = bump * 0.02;
     }
 
-    this.roadLift += ((this.surface === PAVED ? 0.15 : 0) - this.roadLift) * Math.min(1, dt * 12);
+    this.roadLift += ((this.base === PAVED ? 0.15 : 0) - this.roadLift) * Math.min(1, dt * 12);
     this.pos.y = ground + this.roadLift;
     const X = new THREE.Vector3(f.x, pitchSlope, f.z).normalize();
     const Z = new THREE.Vector3(r.x, rollSlope, r.z).normalize();
