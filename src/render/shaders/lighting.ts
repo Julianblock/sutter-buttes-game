@@ -86,7 +86,8 @@ vec3 deckIrradiance() {
   // Multiple scattering in the deck washes out most of the sunset reddening.
   vec3 E = Es + Em;
   E = mix(E, vec3(dot(E, vec3(0.2126, 0.7152, 0.0722))), 0.75);
-  return E * deckTransmission() * vec3(0.93, 0.96, 1.0);
+  // Light ping-pongs between fresh snowpack and the cloud base.
+  return E * deckTransmission() * (1.0 + 0.8 * uSnowCover) * vec3(0.93, 0.96, 1.0);
 }
 
 /** CIE overcast sky: zenith three times brighter than the horizon. */
@@ -213,9 +214,9 @@ float fogDepth(float y0, float y1, float d) {
   return uFogDensity * d * inside;
 }
 
-/** Optical depth of falling rain / snow (visibility ~2.5 km in heavy rain, ~1 km in snow). */
+/** Optical depth of falling rain / snow (visibility ~3 km in heavy rain, ~2 km in snow). */
 float precipDepth(float d) {
-  return (uRain * 0.0011 + uSnowFall * 0.0028) * min(d, 30000.0);
+  return (uRain * 0.0009 + uSnowFall * 0.0017) * min(d, 30000.0);
 }
 
 /** Transmittance of the camera-to-point segment (air and tule fog), for emitters. */
