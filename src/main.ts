@@ -445,7 +445,10 @@ async function boot() {
     env.apply(dt);
 
     air.time += dt;
-    air.sun = Math.max(0, Math.sin(env.sunAltitude * THREE.MathUtils.DEG2RAD) * 1.2) * (1 - 0.6 * G.uCloudCover.value);
+    const deck = Math.min(1, Math.max(G.uRain.value, G.uSnowFall.value) * 5);
+    air.sun = Math.max(0, Math.sin(env.sunAltitude * THREE.MathUtils.DEG2RAD) * 1.2) * (1 - 0.6 * G.uCloudCover.value) * (1 - deck);
+    air.rain = G.uRain.value;
+    air.snow = G.uSnowFall.value;
     air.windX = G.uWind.value.x;
     air.windZ = G.uWind.value.y;
 
