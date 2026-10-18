@@ -38,6 +38,7 @@ import { loadSettings, saveSettings, type GameSettings } from './ui/settings';
 import { RoadIndex } from './world/roadIndex';
 import { Fences } from './world/fences';
 import { Cemeteries, planCemeteries } from './world/cemetery';
+import { resolveDestination } from './world/destinations';
 import { Vehicle } from './vehicle/vehicle';
 import { PAINTS } from './vehicle/carModel';
 import { DriveControls } from './vehicle/driveControls';
@@ -269,17 +270,42 @@ async function boot() {
   const wake = () => sound.start();
   addEventListener('pointerdown', wake);
   addEventListener('keydown', wake);
+  /** Moves the truck or the bird to a named destination picked in the menu. */
+  const goTo = (id: string) => {
+    const s = resolveDestination(id, world.osm, cemeteryPlans);
+    if (!s) return;
+    let { x, z } = s;
+    if (driving) {
+      if (s.road) {
+        x += -Math.cos(s.psi) * 1.6;
+        z += Math.sin(s.psi) * 1.6;
+      }
+      car.place(x, z, s.psi);
+      driveCam.reset();
+    } else {
+      player.flight.spawn(x, heightfield.height(x, z) + 45, z, s.psi);
+      chase.snapFrom(cam, player.object.position);
+    }
+  };
+  const travel = () => {
+    if (!menu.place) return;
+    goTo(menu.place);
+    menu.place = null;
+  };
   menu.onFly = () => {
     sound.start();
     if (driving) setDriving(false);
+    travel();
     setMode('fly');
   };
   menu.onDrive = () => {
     sound.start();
     if (!driving) setDriving(true);
+    travel();
     setMode('fly');
   };
   if (params.has('drive')) setDriving(true);
+  if (params.get('place')) goTo(params.get('place')!);
   setMode(mode);
 
   addEventListener('keydown', (e) => {
