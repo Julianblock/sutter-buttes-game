@@ -99,7 +99,21 @@ export async function buildOsm(size, cacheDir) {
 out geom;`;
   const json = await overpass(query, path.join(cacheDir, `osm_${size}.json`));
 
-  const out = { roads: [], waterways: [], waterAreas: [], buildings: [], power: [], peaks: [], places: [], masts: [] };
+  // Ranch tracks only near the Buttes (the inner region); cemeteries across the valley.
+  const ib = regionBounds(22000);
+  const extra = await overpass(
+    `[out:json][timeout:180];
+(
+  way["highway"="track"](${ib.south},${ib.west},${ib.north},${ib.east});
+  way["landuse"="cemetery"](${bbox});
+  way["amenity"="grave_yard"](${bbox});
+);
+out geom;`,
+    path.join(cacheDir, `osm_extra_${size}.json`),
+  );
+  json.elements.push(...extra.elements);
+
+  const out = { roads: [], waterways: [], waterAreas: [], buildings: [], power: [], peaks: [], places: [], masts: [], cemeteries: [] };
   for (const e of json.elements) {
     const t = e.tags || {};
     if (e.type === 'node') {
@@ -111,8 +125,10 @@ out geom;`;
       continue;
     }
     if (!e.geometry) continue;
-    if (t.highway) {
-      out.roads.push({ name: t.name || t.ref || '', kind: t.highway.replace('_link', ''), lanes: Number(t.lanes) || 0, oneway: t.oneway === 'yes' || t.highway === 'motorway' ? 1 : t.oneway === '-1' ? -1 : 0, pts: toLine(e.geometry) });
+    if (t.landuse === 'cemetery' || t.amenity === 'grave_yard') {
+      out.cemeteries.push({ name: t.name || '', pts: toLine(e.geometry) });
+    } else if (t.highway) {
+      out.roads.push({ name: t.name || t.ref || '', kind: t.highway.replace('_link', ''), grade: Number((t.tracktype || '').slice(5)) || 0, lanes: Number(t.lanes) || 0, oneway: t.oneway === 'yes' || t.highway === 'motorway' ? 1 : t.oneway === '-1' ? -1 : 0, pts: toLine(e.geometry) });
     } else if (t.waterway) {
       out.waterways.push({ name: t.name || '', kind: t.waterway, pts: toLine(e.geometry) });
     } else if (t.natural === 'water') {
