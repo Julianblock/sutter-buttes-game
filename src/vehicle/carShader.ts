@@ -50,6 +50,8 @@ ${lightingCommon}
 uniform vec3 uPaint;
 uniform float uHeadOn;
 uniform float uBrake;
+uniform float uSpeedFrac;
+uniform float uRpmFrac;
 in vec3 vWorld;
 in vec3 vNormal;
 in vec3 vLocal;
@@ -113,7 +115,23 @@ void main() {
     rough = 0.9;
   } else {
     alb = vec3(0.02);
-    emit = vec3(1.0, 0.55, 0.2) * 0.25;
+    rough = 0.3;
+    // Speedometer and tachometer: ticks, needle, faint backlight.
+    float glow = 0.04;
+    for (int i = 0; i < 2; i++) {
+      vec2 d = vLocal.zy - vec2(i == 0 ? -0.5 : -0.34, 1.09);
+      float r = length(d);
+      float a = atan(d.x, d.y);
+      float tick = step(fract((a + 2.3) / 4.6 * 12.0 + 0.04), 0.1) * step(abs(a), 2.35);
+      glow += tick * smoothstep(0.034, 0.036, r) * smoothstep(0.046, 0.044, r) * 0.8;
+      float ang = mix(-2.3, 2.3, i == 0 ? uSpeedFrac : uRpmFrac);
+      vec2 dir = vec2(sin(ang), cos(ang));
+      float t = clamp(dot(d, dir), 0.0, 0.038);
+      float nd = length(d - dir * t);
+      glow += smoothstep(0.0028, 0.0012, nd) * 3.0;
+      glow += smoothstep(0.047, 0.045, r) * 0.05;
+    }
+    emit = vec3(1.0, 0.5, 0.18) * glow;
   }
   float shadow = shadowAt(vWorld + n * 0.05, 0.0006);
   float ao = inside ? 0.5 : 1.0;
