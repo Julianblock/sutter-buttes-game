@@ -60,7 +60,7 @@ export class DriveCamera {
       desired.y += 1.3 + dist * Math.sin(el);
       const gh = this.hf.height(desired.x, desired.z) + 1.0;
       if (desired.y < gh) desired.y = gh;
-      const lookAt = car.pos.clone().addScaledVector(f, 3).add(new THREE.Vector3(0, 1.3, 0));
+      const lookAt = car.pos.clone().addScaledVector(f, 3 * Math.max(0, Math.cos(this.yaw))).add(new THREE.Vector3(0, 1.2, 0));
       if (!this.init) {
         this.chasePos.copy(desired);
         this.chaseLook.copy(lookAt);
