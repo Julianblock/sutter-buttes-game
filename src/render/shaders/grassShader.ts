@@ -57,8 +57,8 @@ void main() {
   float d = distance(centre, uCamPos.xz);
   float keep = smoothstep(uFadeIn.x, uFadeIn.y, d) * (1.0 - smoothstep(uFadeOut.x, uFadeOut.y, d));
   if (h21(cc * 0.07 + 3.3) > keep) { collapse(); return; }
-  vec2 dc = centre - uCar.xy;
-  if (dot(uCar.zw, uCar.zw) > 0.5 && abs(dot(dc, uCar.zw)) < 3.1 && abs(dot(dc, vec2(uCar.w, -uCar.z))) < 1.15) { collapse(); return; }
+  vec2 dCar = centre - uCar.xy;
+  if (dot(uCar.zw, uCar.zw) > 0.5 && abs(dot(dCar, uCar.zw)) < 3.1 && abs(dot(dCar, vec2(uCar.w, -uCar.z))) < 1.15) { collapse(); return; }
 
   // Habitat: open natural grassland only (no canopy, rock, crops or water).
   vec2 lcUV = centre / uLcSize + 0.5;
