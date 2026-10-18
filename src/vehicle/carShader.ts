@@ -54,6 +54,7 @@ uniform float uLampOn;
 uniform float uBrake;
 uniform float uSpeedFrac;
 uniform float uRpmFrac;
+uniform float uCarSnow; // snow lying on the truck 0..1
 in vec3 vWorld;
 in vec3 vNormal;
 in vec3 vLocal;
@@ -148,6 +149,17 @@ void main() {
     }
     emit = vec3(1.0, 0.5, 0.18) * glow;
   }
+  bool exterior = !inside && (part <= 2 || part == 6);
+  if (exterior) {
+    // Rain beads on the wax; tyres and trim go glossy black.
+    alb = wetten(alb, part == 0 ? 0.25 : 0.8);
+    rough = mix(rough, rough * 0.5, uWet);
+    // Snow piles on the roof, hood, bed rails and mirror tops.
+    float sn = uCarSnow * smoothstep(0.55, 0.9, n.y) * smoothstep(0.25, 0.55, vnoise3(vLocal * 7.0) * 0.5 + uCarSnow * 0.6);
+    alb = mix(alb, SNOW_ALB, sn);
+    rough = mix(rough, 0.85, sn);
+    coat *= 1.0 - sn;
+  }
   float shadow = shadowAt(vWorld + n * 0.05, 0.0006);
   float ao = inside ? 0.5 : 1.0;
   vec3 col = shadeSurface(alb, n, vWorld, ao, rough, shadow);
@@ -164,6 +176,12 @@ void main() {
     vec3 env = skyRadianceDir(normalize(vec3(R.x, max(R.y, 0.02), R.z)));
     env *= mix(0.25, 1.0, smoothstep(-0.2, 0.3, R.y));
     col += env * F * coat;
+    if (uWet > 0.05 && part == 0) {
+      // Each bead is a little convex mirror throwing back a bright sky glint.
+      vec3 cell = floor(vLocal * 90.0);
+      float b = step(0.85, hash13(cell)) * smoothstep(0.3, 0.1, length(fract(vLocal * 90.0) - 0.5));
+      col += skyRadianceDir(vec3(0.0, 1.0, 0.0)) * b * uWet * 0.06 * coat * smoothstep(0.0, 0.5, n.y);
+    }
     col += sunRadiance(vWorld.y) * shadow * pow(max(dot(R, uSunDir), 0.0), 600.0) * 30.0 * F * coat * smoothstep(-0.02, 0.03, uSunDir.y);
   }
   col += emit * uInvExposure * mix(0.15, 1.0, uNight);
@@ -175,6 +193,20 @@ void main() {
 export const glassFragment = /* glsl */ `
 ${lightingCommon}
 #include <logdepthbuf_pars_fragment>
+uniform float uWiperPhase; // wiper cycles completed
+uniform float uWiperT;     // seconds per cycle
+uniform float uWiperOn;
+uniform float uWiperAngle; // current blade angle from parked (rad)
+const float WIPER_A = 1.75;
+
+/** Seconds since a blade sweeping 0..WIPER_A..0 last passed angle theta. */
+float wiperSince(float theta) {
+  if (uWiperOn < 0.5) return 1e4;
+  float c = acos(clamp(1.0 - 2.0 * theta / WIPER_A, -1.0, 1.0)) / 6.2832;
+  float ph = fract(uWiperPhase);
+  float s = ph < c ? ph + c : ph < 1.0 - c ? ph - c : ph - (1.0 - c);
+  return s * uWiperT;
+}
 in vec3 vWorld;
 in vec3 vNormal;
 in vec3 vLocal;
@@ -196,6 +228,61 @@ void main() {
   // Premultiplied: reflections add, the tint absorbs some of what's behind.
   float absorb = inside ? 0.06 : 0.28;
   vec3 col = refl * (inside ? 0.35 : 1.0);
+
+  // Windshield: raindrops and the two wiper blades sweeping them away.
+  vec3 nL = normalize(cross(dFdx(vLocal), dFdy(vLocal)));
+  if (abs(nL.x) > 0.35 && vLocal.x > 0.08) {
+    vec2 g = vec2(vLocal.z, (1.0 - vLocal.x) / 0.88 * 1.08);
+    float wet = uRain + uSnowFall * 0.6;
+    vec3 sky = skyAmbient(vec3(0.0, 1.0, 0.0), 1.0) / PI;
+    for (int w = 0; w < 2; w++) {
+      vec2 pivot = vec2(w == 0 ? -0.78 : 0.02, 0.04);
+      vec2 d = g - pivot;
+      float r = length(d);
+      float ang = atan(d.y, d.x);
+      float blade = uWiperAngle;
+      // Blade: rubber strip on a thin arm.
+      vec2 bd = vec2(cos(blade), sin(blade));
+      float along = dot(d, bd);
+      float off = abs(dot(d, vec2(-bd.y, bd.x)));
+      if (along > 0.0 && along < 0.62 && off < (along > 0.12 ? 0.007 : 0.004)) {
+        outColor = vec4(vec3(0.01) * sky * 4.0, 1.0);
+        return;
+      }
+    }
+    if (wet > 0.0) {
+      for (int layer = 0; layer < 2; layer++) {
+        float cs = layer == 0 ? 0.028 : 0.07;
+        vec2 cell = floor(g / cs);
+        vec2 h = hash22(cell + float(layer) * 31.0);
+        vec2 c = (cell + 0.2 + 0.6 * h) * cs;
+        // Seconds since a blade last crossed this drop's angle.
+        float since = 1e4;
+        for (int w = 0; w < 2; w++) {
+          vec2 pivot = vec2(w == 0 ? -0.78 : 0.02, 0.04);
+          vec2 d = c - pivot;
+          if (length(d) < 0.62 && d.y > -0.01) since = min(since, wiperSince(atan(max(d.y, 0.0), d.x)));
+        }
+        // Drops land a few per cell per minute; beyond the blades' reach they
+        // build up to a sparse, permanent scatter.
+        float born = hash12(cell * 1.7 + float(layer) * 9.0) / max(wet * (layer == 0 ? 0.3 : 0.08), 1e-3);
+        bool settles = hash12(cell * 3.1 + 2.0) < (layer == 0 ? 0.5 : 0.3);
+        if (since > born && settles) {
+          float rad = cs * (0.07 + 0.15 * hash12(cell + 4.4));
+          vec2 dp = (g - c) / rad;
+          float q = dot(dp, dp);
+          if (q < 1.0) {
+            // A drop is a tiny inverted lens: sky glows in its lower half, a
+            // bright rim catches light and the centre darkens the view.
+            float lens = smoothstep(0.2, -0.6, dp.y);
+            col += sky * (0.25 * lens + 0.3 * smoothstep(0.6, 1.0, q)) + env * F;
+            absorb = max(absorb, 0.12 + 0.25 * smoothstep(0.4, 1.0, q));
+          }
+        }
+      }
+    }
+  }
+
   col *= segmentTransmittance(vWorld);
   outColor = vec4(col, absorb);
 }
