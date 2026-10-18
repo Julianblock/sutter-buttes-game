@@ -14,6 +14,8 @@ The terrain, land cover, roads, buildings and trees all come from real survey da
 - **Vegetation.** About 1.4 million trees: blue oak and valley oak woodland detected from the imagery, plus almond, walnut and prune orchards planted on survey grids, with bloom and leaf colour that change by season.
 - **Wildlife.** Grazing cattle, black-tailed deer, wild turkeys and coyotes that flee when you swoop low. Snow goose skeins, vulture kettles, egrets and blackbird murmurations, all varying by season.
 - **Roads and traffic.** Cars, pickups and big rigs drive the real road network, including Pass Road through the Buttes. Headlights and taillights show at night.
+- **Weather.** Clear, haze, scattered cloud, overcast, tule fog, rain, thunderstorms and snow. Rain soaks the ground and roads into reflective puddles with raindrop rings; snow builds up on fields, trees, roads and the truck, then melts depending on the season and sun. Lightning lights up the valley, and its thunder arrives late by the strike's distance. Wet roads cut tyre grip and can aquaplane the truck, fields turn to mud, snow makes everything slide, and showers bring downdrafts and turbulence that weigh a bird down.
+- **Drive a pickup.** Swap between bird and truck at any time. The truck has a first-person cockpit with live gauges, headlights, wipers, dust and spray trails, and collisions with trees.
 - **Structures.** Farmhouses, metal sheds, rice silos and the South Butte antenna farm with blinking beacons. Towns get lit windows, porch lights and streetlights.
 - **Procedural sound.** Wind rises with airspeed and whistles in a stoop, and wingbeats are audible. The ambience follows the time, season and terrain: meadowlarks, red-winged blackbirds, crickets that chirp at the right rate for the temperature, frogs over the rice, cattle, coyotes and honking geese.
 
@@ -31,7 +33,21 @@ The terrain, land cover, roads, buildings and trees all come from real survey da
 | V | Call |
 | M | Mute |
 | H | Help |
+| G | Switch between bird and truck |
 | Esc | Menu |
+
+Driving:
+
+| Key | Action |
+| --- | --- |
+| W / S | Throttle / brake and reverse |
+| A / D | Steer |
+| Space | Handbrake |
+| Shift | Boost |
+| Mouse | Look around |
+| C | Cockpit, chase or hood camera |
+| L | Headlights |
+| V | Horn |
 
 ## Development
 
@@ -42,7 +58,7 @@ npm run build
 npm run data      # rebuild public/data from USGS / USDA / OSM sources
 ```
 
-Debug URL parameters: `?fly` skips the menu, and `?free&cam=x,y,z,yaw,pitch` starts a free camera.
+Debug URL parameters: `?fly` skips the menu, `?drive` starts in the truck, `?weather=rain` (or `storm`, `snow`, `tulefog`, …) and `?time=midday` pick conditions, and `?free&cam=x,y,z,yaw,pitch` starts a free camera.
 
 ## Data sources
 
