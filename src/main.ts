@@ -510,6 +510,8 @@ async function boot() {
     dust.update(dt, car.physics, driving && mode === 'fly', Math.min(1, sw.z + sw.w * 0.8 + sw.y * 0.2), cam, window.innerHeight * engine.pixelRatio);
     precip.update(dt, cam, window.innerHeight * engine.pixelRatio, car.object.visible ? car.object.matrixWorld : null);
     car.model.weather(dt, car.physics.speed);
+    car.physics.wet = G.uWet.value;
+    car.physics.snow = G.uSnowCover.value;
     const actor = driving ? car.object.position : player.object.position;
     wildlife.update(dt, cam.position, actor);
     flocks.setMonth(env.month);
