@@ -1,4 +1,5 @@
 import type { OsmData } from './meta';
+import { roadSpec } from './roads';
 
 export interface RoadHit {
   dist: number;
@@ -16,23 +17,18 @@ export interface RoadHit {
 
 const CELL = 120;
 
-const HALF: Record<string, number> = {
-  motorway: 7.5, trunk: 5.5, primary: 4.5, secondary: 4.0, tertiary: 3.6,
-  unclassified: 3.2, residential: 3.4, service: 2.6, track: 2.0,
-};
-
 /** Grid-hashed road segments for nearest-road queries (spawning, grip, HUD). */
 export class RoadIndex {
   private cells = new Map<number, number[]>();
   private seg: Float32Array;
-  private meta: { name: string; kind: string }[] = [];
+  private meta: { name: string; kind: string; half: number }[] = [];
   private segRoad: Uint32Array;
 
   constructor(osm: OsmData) {
     const s: number[] = [];
     const r: number[] = [];
     osm.roads.forEach((road, ri) => {
-      this.meta.push({ name: road.name, kind: road.kind });
+      this.meta.push({ name: road.name, kind: road.kind, half: roadSpec(road).half });
       const p = road.pts;
       for (let k = 0; k + 3 < p.length; k += 2) {
         const id = s.length / 4;
@@ -82,7 +78,7 @@ export class RoadIndex {
           if (d < bestD) {
             bestD = d;
             const len = Math.sqrt(len2);
-            best = { dist: d, x: px, z: pz, dx: ex / len, dz: ez / len, name: m.name, kind: m.kind, halfWidth: HALF[m.kind] ?? 3 };
+            best = { dist: d, x: px, z: pz, dx: ex / len, dz: ez / len, name: m.name, kind: m.kind, halfWidth: m.half };
           }
         }
       }

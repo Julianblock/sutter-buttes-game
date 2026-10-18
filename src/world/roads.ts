@@ -8,7 +8,7 @@ const TILE = 3000;
 const STEP = 12;
 
 /** Paved half width (m) and marking style per road class. */
-function spec(r: OsmRoad): { half: number; style: number; rank: number } {
+export function roadSpec(r: OsmRoad): { half: number; style: number; rank: number } {
   const lanes = r.lanes || 0;
   switch (r.kind) {
     case 'motorway':
@@ -62,9 +62,9 @@ export class Roads {
     const nrm = { x: 0, y: 1, z: 0 };
     // Draw minor roads first so bigger ones blend on top at junctions.
     const roads = osm.roads.filter((r) => r.pts.length >= 4 && Math.hypot(r.pts[0], r.pts[1]) < radius);
-    roads.sort((a, b) => spec(a).rank - spec(b).rank);
+    roads.sort((a, b) => roadSpec(a).rank - roadSpec(b).rank);
     for (const r of roads) {
-      const { half, style, rank } = spec(r);
+      const { half, style, rank } = roadSpec(r);
       const w = half / 0.85;
       // Resample the polyline so the ribbon follows the terrain.
       const pts: number[] = [];
