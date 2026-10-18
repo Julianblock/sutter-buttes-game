@@ -63,7 +63,7 @@ void main() {
     float eyes = vLocal.x > 0.1 ? exp(-dot(e, e) / 0.0003) : 0.0;
     col = vec3(0.62, 0.78, 1.0) * (0.06 + rim * 0.75) * mist * hem * (1.0 - face * 0.85) + vec3(0.8, 0.95, 1.0) * eyes * 1.5;
   }
-  outColor = vec4(col * flick * uFade * 0.5 * uInvExposure, 1.0);
+  outColor = vec4(col * flick * uFade * 0.9 * uInvExposure, 1.0);
 }
 `;
 
