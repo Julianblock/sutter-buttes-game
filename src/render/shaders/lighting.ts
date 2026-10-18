@@ -105,19 +105,21 @@ float nearShadow(vec3 wp, float bias) {
   vec3 p = sc.xyz / sc.w;
   if (any(lessThan(p.xy, vec2(0.001))) || any(greaterThan(p.xy, vec2(0.999)))) return 1.0;
   vec2 texel = 1.0 / vec2(textureSize(uShadowMap, 0));
+  // Smooth 3x3-texel PCF with bilinear weights: soft, stable edges with no
+  // per-pixel noise (random rotations read as grain, especially from altitude).
+  vec2 uv = p.xy / texel - 0.5;
+  vec2 f = fract(uv);
+  vec2 base = (floor(uv) + 0.5) * texel;
   float sum = 0.0;
-  // 12-tap rotated Poisson PCF
-  const vec2 taps[12] = vec2[](
-    vec2(-0.326, -0.406), vec2(-0.840, -0.074), vec2(-0.696, 0.457), vec2(-0.203, 0.621),
-    vec2(0.962, -0.195), vec2(0.473, -0.480), vec2(0.519, 0.767), vec2(0.185, -0.893),
-    vec2(0.507, 0.064), vec2(0.896, 0.412), vec2(-0.322, -0.933), vec2(-0.792, -0.598));
-  float ang = hash12(gl_FragCoord.xy) * 6.2831;
-  mat2 R = mat2(cos(ang), sin(ang), -sin(ang), cos(ang));
-  for (int i = 0; i < 12; i++) {
-    float d = texture(uShadowMap, p.xy + R * taps[i] * texel * 1.6).r;
-    sum += p.z - bias > d ? 0.0 : 1.0;
+  for (int j = -1; j <= 2; j++) {
+    float wy = j == -1 ? 1.0 - f.y : j == 2 ? f.y : 1.0;
+    for (int i = -1; i <= 2; i++) {
+      float wx = i == -1 ? 1.0 - f.x : i == 2 ? f.x : 1.0;
+      float d = texture(uShadowMap, base + vec2(float(i), float(j)) * texel).r;
+      sum += (p.z - bias > d ? 0.0 : 1.0) * wx * wy;
+    }
   }
-  float s = sum / 12.0;
+  float s = sum / 9.0;
   vec2 edge = smoothstep(vec2(0.0), vec2(0.08), p.xy) * smoothstep(vec2(1.0), vec2(0.92), p.xy);
   return mix(1.0, s, edge.x * edge.y);
 }
