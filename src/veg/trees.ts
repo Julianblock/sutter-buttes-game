@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { G } from '../render/globals';
 import type { ShadowMap } from '../render/shadows';
 import type { Heightfield } from '../world/heightfield';
+import type { RoadIndex } from '../world/roadIndex';
 import { LC } from '../world/meta';
 import { buildTree } from './treeGeometry';
 import { SPECIES_COUNT, treeFragment, treeVertex } from './treeShader';
@@ -88,8 +89,10 @@ export class Trees {
   private box = new THREE.Box3();
   counts = [0, 0, 0];
   total = 0;
+  private tileMap = new Map<number, Tile>();
+  private zone = 0;
 
-  constructor(buf: ArrayBuffer, zone: number, hf: Heightfield) {
+  constructor(buf: ArrayBuffer, zone: number, hf: Heightfield, private roads?: RoadIndex) {
     const leafCol = Array.from({ length: SPECIES_COUNT }, () => new THREE.Color());
     const bark = BARK.map((h) => new THREE.Color(h));
     this.material = new THREE.ShaderMaterial({
@@ -128,6 +131,41 @@ export class Trees {
     this.decode(buf, zone, hf);
   }
 
+  /**
+   * Deepest trunk overlapping a circle at (x, z), as a push-out direction and
+   * depth. Shrubs are ignored (the truck rolls over them).
+   */
+  trunkHit(x: number, z: number, radius: number): { nx: number; nz: number; depth: number } | null {
+    const zone = this.zone;
+    const tilesN = Math.ceil(zone / TILE);
+    const reach = radius + 1;
+    const i0 = Math.floor((x - reach + zone / 2) / TILE), i1 = Math.floor((x + reach + zone / 2) / TILE);
+    const j0 = Math.floor((z - reach + zone / 2) / TILE), j1 = Math.floor((z + reach + zone / 2) / TILE);
+    let best: { nx: number; nz: number; depth: number } | null = null;
+    for (let tj = j0; tj <= j1; tj++)
+      for (let ti = i0; ti <= i1; ti++) {
+        if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) continue;
+        const t = this.tileMap.get(tj * tilesN + ti);
+        if (!t) continue;
+        const d = t.data;
+        for (let k = 0; k < t.count; k++) {
+          const o = k * 8;
+          const dx = x - d[o], dz = z - d[o + 2];
+          if (Math.abs(dx) > reach || Math.abs(dz) > reach) continue;
+          const sp = d[o + 6];
+          if (sp === TREE.SHRUB) continue;
+          const trunk = sp >= TREE.ALMOND ? 0.2 : Math.min(0.7, Math.max(0.25, d[o + 4] * 0.08));
+          const dist = Math.hypot(dx, dz);
+          const depth = radius + trunk - dist;
+          if (depth > 0 && (!best || depth > best.depth)) {
+            const l = dist || 1;
+            best = { nx: dx / l, nz: dz / l, depth };
+          }
+        }
+      }
+    return best;
+  }
+
   /** Registers the near tree LODs as shadow casters. */
   addShadowCasters(shadow: ShadowMap) {
     const mat = new THREE.ShaderMaterial({
@@ -143,6 +181,7 @@ export class Trees {
   }
 
   private decode(buf: ArrayBuffer, zone: number, hf: Heightfield) {
+    this.zone = zone;
     const v = new DataView(buf);
     const n = buf.byteLength / 6;
     const tilesN = Math.ceil(zone / TILE);
@@ -175,13 +214,29 @@ export class Trees {
         r = Math.max(r, 3) * (1.05 + seed * 0.3);
         h = sp === TREE.COTTONWOOD ? r * 2.4 + 4 : r * 1.6 + 3.5;
       }
-      const ti = Math.floor((x + zone / 2) / TILE);
-      const tj = Math.floor((z + zone / 2) / TILE);
+      // Crown blobs over a road put the trunk on the asphalt; step it onto the shoulder.
+      let tx = x, tz = z;
+      const road = this.roads?.nearest(x, z, 16);
+      if (road) {
+        const clear = road.halfWidth + 1.3 + (sp === TREE.SHRUB ? 0.3 : Math.min(r * 0.15, 0.8));
+        if (road.dist < clear) {
+          let nx = x - road.x, nz = z - road.z;
+          const l = Math.hypot(nx, nz);
+          if (l > 0.01) (nx /= l), (nz /= l);
+          else (nx = -road.dz), (nz = road.dx);
+          tx = road.x + nx * clear;
+          tz = road.z + nz * clear;
+        }
+      }
+      const ti = Math.floor((tx + zone / 2) / TILE);
+      const tj = Math.floor((tz + zone / 2) / TILE);
       if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) continue;
-      lists[tj * tilesN + ti].push(x, y - 0.35, z, seed * 6.2831, r, h, sp, hash(seed * 17.3));
+      lists[tj * tilesN + ti].push(tx, hf.height(tx, tz) - 0.35, tz, seed * 6.2831, r, h, sp, hash(seed * 17.3));
     }
     this.plantOrchards(zone, hf, (ti, tj, ...vals) => {
       if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) return;
+      const road = this.roads?.nearest(vals[0], vals[2], 12);
+      if (road && road.dist < road.halfWidth + 1.8) return;
       lists[tj * tilesN + ti].push(...vals);
     });
     for (let tj = 0; tj < tilesN; tj++) {
@@ -194,14 +249,16 @@ export class Trees {
           minY = Math.min(minY, l[i + 1]);
           maxY = Math.max(maxY, l[i + 1] + l[i + 5]);
         }
-        this.tiles.push({
+        const tile: Tile = {
           data: new Float32Array(l),
           count: l.length / 8,
           cx: -zone / 2 + (ti + 0.5) * TILE,
           cz: -zone / 2 + (tj + 0.5) * TILE,
           minY,
           maxY,
-        });
+        };
+        this.tiles.push(tile);
+        this.tileMap.set(tj * tilesN + ti, tile);
         this.total += l.length / 8;
       }
     }
