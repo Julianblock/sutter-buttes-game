@@ -492,6 +492,12 @@ async function boot() {
     flocks.setMonth(env.month);
     flocks.update(dt, cam.position, { x: air.windX, z: air.windZ });
     syncCarCasters();
+    G.uHeadOn.value = car.object.visible ? car.headOn : 0;
+    if (G.uHeadOn.value > 0) {
+      car.model.body.updateWorldMatrix(true, false);
+      G.uHeadPos.value.set(2.9, 0.95, 0).applyMatrix4(car.model.body.matrixWorld);
+      G.uHeadDir.value.set(1, -0.035, 0).transformDirection(car.model.body.matrixWorld);
+    }
     const focus = free ? cam.position : actor;
     props.update(cam.position, focus);
     shadow.update(engine.renderer, focus);
