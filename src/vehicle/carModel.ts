@@ -115,7 +115,7 @@ function bodyGeometry() {
     parts.push(span(2.8, 2.86, 0.62, 0.7, s * 0.7, s * 0.9, P.TRIM)); // fog lamp bezel
     // Mirrors.
     parts.push(box(0.1, 0.2, 0.24, 0.84, 1.42, s * 1.15, P.TRIM));
-    parts.push(span(0.785, 0.79, 1.34, 1.5, s * 1.05, s * 1.25, P.CHROME));
+    parts.push(span(0.785, 0.79, 1.34, 1.5, s * 1.05, s * 1.25, P.MIRROR));
     parts.push(box(0.08, 0.05, 0.12, 0.9, 1.33, s * 1.03, P.TRIM));
     // Running boards.
     parts.push(span(-0.7, 0.95, 0.36, 0.42, s * 0.98, s * 1.12, P.TRIM));
@@ -150,18 +150,18 @@ function bodyGeometry() {
   parts.push(span(-0.66, 0.1, 1.855, 1.876, -0.83, 0.83, P.HEADLINER));
 
   // Cabin.
-  parts.push(span(-0.72, 1.0, 0.5, 0.62, -0.9, 0.9, P.INTERIOR)); // floor
-  parts.push(span(0.62, 1.0, 0.85, 1.2, -0.92, 0.92, P.INTERIOR)); // dash
-  parts.push(span(0.57, 0.68, 1.15, 1.25, -0.64, -0.2, P.INTERIOR)); // binnacle hood
+  parts.push(span(-0.72, 1.0, 0.5, 0.62, -0.9, 0.9, P.DASH)); // floor
+  parts.push(span(0.62, 1.0, 0.85, 1.2, -0.92, 0.92, P.DASH)); // dash
+  parts.push(span(0.57, 0.68, 1.15, 1.25, -0.64, -0.2, P.DASH)); // binnacle hood
   parts.push(span(0.615, 0.62, 1.03, 1.15, -0.6, -0.24, P.GAUGES)); // instruments
-  parts.push(span(0.54, 0.66, 0.7, 1.06, -0.13, 0.13, P.TRIM)); // console
-  parts.push(span(0.535, 0.54, 0.92, 1.0, -0.1, 0.1, P.GAUGES)); // radio
+  parts.push(span(0.58, 0.66, 0.62, 1.0, -0.13, 0.13, P.DASH)); // console
+  parts.push(span(0.575, 0.58, 0.88, 0.94, -0.1, 0.1, P.GAUGES)); // radio
   parts.push(span(-0.62, -0.08, 0.62, 0.86, -0.86, 0.86, P.INTERIOR)); // seat cushion
   const back = new THREE.BoxGeometry(0.14, 0.68, 1.72).rotateZ(-0.2).translate(-0.62, 1.18, 0);
   parts.push(withPart(back, P.INTERIOR));
   for (const s of [-1, 1]) parts.push(span(-0.76, -0.64, 1.5, 1.7, s * 0.3, s * 0.58, P.INTERIOR));
   parts.push(span(0.27, 0.29, 1.69, 1.76, -0.13, 0.13, P.TRIM)); // rear-view mirror
-  parts.push(span(0.265, 0.27, 1.7, 1.75, -0.12, 0.12, P.CHROME));
+  parts.push(span(0.265, 0.27, 1.7, 1.75, -0.12, 0.12, P.MIRROR));
   parts.push(span(0.29, 0.31, 1.75, 1.84, -0.015, 0.015, P.TRIM));
   return merge(parts);
 }
@@ -194,12 +194,12 @@ function wheelGeometry() {
 function steeringGeometry() {
   // Rim around the local x axis (the column), facing the driver at -x.
   const parts: THREE.BufferGeometry[] = [];
-  parts.push(withPart(new THREE.TorusGeometry(0.19, 0.022, 8, 36).rotateY(Math.PI / 2), P.TRIM));
-  parts.push(withPart(new THREE.CylinderGeometry(0.055, 0.06, 0.05, 16).rotateZ(Math.PI / 2), P.TRIM));
+  parts.push(withPart(new THREE.TorusGeometry(0.19, 0.022, 10, 40).rotateY(Math.PI / 2), P.DASH));
+  parts.push(withPart(new THREE.CylinderGeometry(0.055, 0.06, 0.05, 16).rotateZ(Math.PI / 2), P.DASH));
   const st = new StrutBuilder();
   for (const a of [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3]) {
     const d = V(0, -Math.cos(a), Math.sin(a));
-    st.strut(d.clone().multiplyScalar(0.05), d.clone().multiplyScalar(0.18), 0.014, P.TRIM, 5);
+    st.strut(d.clone().multiplyScalar(0.05), d.clone().multiplyScalar(0.18), 0.014, P.DASH, 5);
   }
   parts.push(st.build());
   return merge(parts);
@@ -254,7 +254,7 @@ export class CarModel {
       transparent: true,
       depthWrite: false,
       blending: THREE.CustomBlending,
-      blendSrc: THREE.SrcAlphaFactor,
+      blendSrc: THREE.OneFactor,
       blendDst: THREE.OneMinusSrcAlphaFactor,
     });
 
@@ -281,7 +281,7 @@ export class CarModel {
     const mount = new THREE.Group();
     mount.position.set(0.4, 1.1, EYE.z);
     mount.rotation.z = -0.45;
-    const column = withPart(new THREE.CylinderGeometry(0.03, 0.035, 0.3, 10).rotateZ(Math.PI / 2).translate(0.17, 0, 0), P.TRIM);
+    const column = withPart(new THREE.CylinderGeometry(0.03, 0.035, 0.3, 10).rotateZ(Math.PI / 2).translate(0.17, 0, 0), P.DASH);
     const colMesh = new THREE.Mesh(merge([column]), this.material);
     colMesh.frustumCulled = false;
     mount.add(colMesh);

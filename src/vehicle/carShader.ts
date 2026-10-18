@@ -11,6 +11,8 @@ export const CAR_PART = {
   TIRE: 6,
   HEADLINER: 7,
   GAUGES: 8,
+  MIRROR: 9,
+  DASH: 10, // dash top and steering wheel grips: dark, low sheen
 } as const;
 
 export const carVertex = /* glsl */ `
@@ -93,10 +95,23 @@ void main() {
     rough = 0.18;
     coat = 0.6;
   } else if (part == 3) {
-    // Grained dash plastic and seat cloth.
-    float g = vnoise(vLocal.xz * 60.0) * 0.5 + vnoise(vLocal.yz * 23.0) * 0.5;
-    alb = vec3(0.055, 0.05, 0.047) * (0.85 + 0.3 * g);
-    rough = 0.85;
+    // Tan seat cloth and door cards.
+    float g = vnoise3(vLocal * 160.0) * 0.6 + vnoise3(vLocal * 37.0) * 0.4;
+    alb = vec3(0.2, 0.15, 0.1) * (0.85 + 0.3 * g);
+    rough = 0.9;
+  } else if (part == 9) {
+    // Mirror glass: sky above the horizon, dark land below.
+    vec3 R = reflect(-V, n);
+    vec3 sky = skyRadianceDir(normalize(vec3(R.x, max(R.y, 0.02), R.z)));
+    vec3 land = skyAmbient(vec3(0.0, 1.0, 0.0), 1.0) * vec3(0.12, 0.11, 0.07) + sunRadiance(vWorld.y) * max(uSunDir.y, 0.0) * vec3(0.05, 0.045, 0.03);
+    vec3 col = mix(land, sky, smoothstep(-0.03, 0.03, R.y)) * 0.85;
+    outColor = vec4(applyAtmosphere(col, vWorld), 1.0);
+    return;
+  } else if (part == 10) {
+    float g = vnoise3(vLocal * 140.0);
+    alb = vec3(0.065, 0.06, 0.055) * (0.9 + 0.2 * g);
+    rough = 0.55;
+    coat = 0.08;
   } else if (part == 4) {
     alb = vec3(0.6);
     rough = 0.1;
@@ -136,6 +151,11 @@ void main() {
   float shadow = shadowAt(vWorld + n * 0.05, 0.0006);
   float ao = inside ? 0.5 : 1.0;
   vec3 col = shadeSurface(alb, n, vWorld, ao, rough, shadow);
+  if (part == 3 || part == 7 || part == 8 || part == 10 || inside) {
+    // Light bouncing into the cab through the glass.
+    vec3 fill = skyAmbient(vec3(0.0, 1.0, 0.0), 1.0) * 0.5 + sunRadiance(vWorld.y) * max(uSunDir.y, 0.04) * 0.15;
+    col += alb * fill * (0.55 + 0.45 * max(n.y, 0.0));
+  }
   if (coat > 0.0) {
     // Clear coat: mirror the sky, occluded where the body faces down.
     vec3 R = reflect(-V, n);
@@ -171,11 +191,11 @@ void main() {
   vec3 env = skyRadianceDir(normalize(vec3(R.x, max(R.y, 0.02), R.z)));
   float shadow = shadowAt(vWorld, 0.0006);
   vec3 sun = sunRadiance(vWorld.y) * shadow * pow(max(dot(R, uSunDir), 0.0), 900.0) * 40.0;
-  vec3 col = (env + sun) * F;
-  // Seen from the cabin the glass only faintly reflects the dash and sky.
-  float a = inside ? clamp(F * 0.6, 0.02, 0.25) : clamp(0.35 + F, 0.0, 0.95);
-  col = mix(col, vec3(0.004, 0.006, 0.007), inside ? 0.0 : 0.4);
-  col = applyAtmosphere(col, vWorld);
-  outColor = vec4(col / max(a, 0.02) * (inside ? 1.0 : 0.6), a);
+  vec3 refl = (env + sun) * F;
+  // Premultiplied: reflections add, the tint absorbs some of what's behind.
+  float absorb = inside ? 0.06 : 0.28;
+  vec3 col = refl * (inside ? 0.35 : 1.0) + vec3(0.003, 0.005, 0.006) * absorb;
+  col *= segmentTransmittance(vWorld);
+  outColor = vec4(col, absorb);
 }
 `;
