@@ -159,12 +159,15 @@ export class CarPhysics {
       this.braking = Math.max(this.braking, inp.handbrake);
     }
     // Rolling resistance, drag, slope.
+    // Automatic in park: hold on hills when stopped with no pedals pressed.
+    const parked = inp.throttle < 0.02 && inp.brake < 0.02 && Math.abs(vf) < 1.0;
     const n = this.hf.normal(this.pos.x, this.pos.z, { x: 0, y: 1, z: 0 }, 3);
-    a += G * (n.x * f.x + n.z * f.z);
+    if (!parked) a += G * (n.x * f.x + n.z * f.z);
+    else a -= vf * 4;
     const resist = s.roll * G + 0.00042 * vf * vf;
     a -= Math.sign(vf) * Math.min(Math.abs(vf) / dt + Math.abs(a), resist);
     vf += a * dt;
-    if (inp.throttle === 0 && inp.brake === 0 && Math.abs(vf) < 0.15) vf = 0;
+    if (parked && Math.abs(vf) < 0.15) vf = 0;
     this.accel = a;
 
     // Yaw from the bicycle model, capped by available grip (understeer).
