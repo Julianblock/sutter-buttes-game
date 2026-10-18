@@ -45,6 +45,14 @@ import { DriveControls } from './vehicle/driveControls';
 import { DriveCamera } from './vehicle/driveCamera';
 import { DustTrail } from './vehicle/dust';
 import { Precipitation } from './weather/precip';
+import { Water } from './world/water';
+import { WaterSurface } from './render/waterSurface';
+import { Fish } from './life/fish';
+import { FISH } from './life/fishSpecies';
+import { Ghosts } from './life/ghosts';
+import { Discoveries } from './ui/discoveries';
+import { Lore } from './world/lore';
+import { VolcanoVision } from './world/volcano';
 
 function paletteFor(s: GameSettings): Palette {
   const sp = speciesById(s.bird) ?? SPECIES[0];
@@ -69,6 +77,12 @@ async function boot() {
   const world = await loadWorld((label, f) => loading.progress(label, f * 0.9));
   loading.progress('Building the valley', 0.92);
   const heightfield = new Heightfield(world);
+  const cemeteryPlans = planCemeteries(world.osm);
+  const roadIndex = new RoadIndex(world.osm);
+  // Carves river and pond beds into the height grids, so it runs before the GPU copies.
+  const water = new Water(world, heightfield, roadIndex);
+  G.uWaterTex.value = water.texture;
+  G.uWaterSize.value = water.size;
   const tex = createWorldTextures(world, engine.renderer);
   const regionSizes: [number, number, number] = [
     world.meta.regions.inner.size,
@@ -89,13 +103,12 @@ async function boot() {
   const terrainShadow = new TerrainShadow(engine.renderer, tex, regionSizes);
   const terrain = new Terrain(tex, regionSizes, world.meta.landcover.size);
   const sky = new Sky();
-  engine.scene.add(sky.mesh, terrain.mesh);
+  const waterSurface = new WaterSurface(terrain);
+  engine.scene.add(sky.mesh, terrain.mesh, waterSurface.mesh);
 
   loading.progress('Growing the oak woodland', 0.95);
   const treeBuf = await fetch('data/trees.bin').then((r) => r.arrayBuffer());
-  const cemeteryPlans = planCemeteries(world.osm);
-  const roadIndex = new RoadIndex(world.osm);
-  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex, cemeteryPlans.flatMap((p) => p.trees));
+  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex, cemeteryPlans.flatMap((p) => p.trees), water);
   engine.scene.add(trees.group);
   const seasonMonth = () => env.month - 1 + (env.day - 1) / 30;
   trees.setSeason(seasonMonth());
@@ -123,9 +136,20 @@ async function boot() {
   flocks.setMonth(env.month);
   engine.scene.add(flocks.mesh);
 
+  const fish = new Fish(water, heightfield);
+  fish.setMonth(env.month);
+  engine.scene.add(fish.mesh);
+  const witches = cemeteryPlans.find((p) => p.name === 'North Butte Cemetery');
+  const ghosts = witches ? new Ghosts(witches, heightfield) : null;
+  if (ghosts) engine.scene.add(ghosts.group);
+  const vent = new THREE.Vector3(-487, heightfield.height(-487, -80) - 15, -80);
+  const volcano = new VolcanoVision(vent, { x: -600, z: -1700, r: 4200 });
+  engine.scene.add(volcano.points);
+
   const air = new AirField(heightfield);
   const species = speciesById(settings.bird) ?? SPECIES[0];
   const player = new Player(species, paletteFor(settings), heightfield, air);
+  player.flight.water = (x, z) => water.sample(x, z);
   const sp = (params.get('spawn') || '-500,560,2600,3.1416').split(',').map(Number);
   player.flight.spawn(sp[0], sp[1], sp[2], sp[3]);
   engine.scene.add(player.object);
@@ -156,7 +180,20 @@ async function boot() {
   const hud = new Hud(places);
   hud.units = settings.units;
   const menu = new Menu(settings);
-  ui.append(menu.root, hud.root, hud.help);
+  const journal = new Discoveries();
+  const lore = new Lore(heightfield, journal, volcano, witches);
+  journal.total = lore.ids.length + FISH.length + (ghosts ? 1 : 0);
+  fish.onSpot = (s) => journal.discover({ id: 'fish-' + s.id, kind: 'fish', kicker: 'Fish spotted', title: s.name, text: s.note });
+  if (ghosts)
+    ghosts.onSight = () =>
+      journal.discover({
+        id: 'ghosts',
+        kind: 'secret',
+        kicker: 'North Butte Cemetery · after dark',
+        title: 'You are not alone',
+        text: 'Pale shapes drift between the old stones, and fade the moment you come close. Whatever they are, the stories were true.',
+      });
+  ui.append(menu.root, hud.root, hud.help, journal.root);
 
   const free = params.has('free');
   const inspect = params.has('inspect');
@@ -410,7 +447,7 @@ async function boot() {
     if (keys.has('KeyA')) cam.position.addScaledVector(right, -speed * dt);
     if (keys.has('KeyE')) cam.position.y += speed * dt;
     if (keys.has('KeyQ')) cam.position.y -= speed * dt;
-    cam.position.y = Math.max(cam.position.y, heightfield.height(cam.position.x, cam.position.z) + 2);
+    cam.position.y = Math.max(cam.position.y, heightfield.height(cam.position.x, cam.position.z) + 0.3);
     cam.rotation.set(pitch, yaw, 0, 'YXZ');
     cam.updateMatrixWorld();
   }
@@ -476,6 +513,11 @@ async function boot() {
   const murky = () => G.uFogDensity.value > 0.003 || G.uRain.value + G.uSnowFall.value > 0.04;
 
   function frame() {
+    step();
+    schedule(frame);
+  }
+
+  function step() {
     const rawDt = clock.getDelta();
     const dt = Math.min(rawDt, 0.1);
     if (!params.has('timer')) engine.adapt(rawDt);
@@ -534,6 +576,10 @@ async function boot() {
       atmosphere.rebuildTransmittance();
     }
     G.uCamPos.value.copy(cam.position);
+    const camWater = water.sample(cam.position.x, cam.position.z);
+    const underwater = camWater.mask > 0.3 && cam.position.y < camWater.level - 0.02;
+    G.uUnderwater.value = underwater ? 1 : 0;
+    G.uCamWaterY.value = camWater.level;
     G.uCloudOffset.value.addScaledVector(G.uWind.value, dt * 4);
     atmosphere.update();
     terrainShadow.update();
@@ -550,12 +596,32 @@ async function boot() {
     const sw = G.uSeason.value;
     dust.update(dt, car.physics, driving && mode === 'fly', Math.min(1, sw.z + sw.w * 0.8 + sw.y * 0.2), cam, window.innerHeight * engine.pixelRatio);
     precip.update(dt, cam, window.innerHeight * engine.pixelRatio, car.object.visible ? car.object.matrixWorld : null);
+    if (underwater) precip.mesh.visible = false;
     car.model.weather(dt, car.physics.speed);
     car.physics.wet = G.uWet.value;
     car.physics.snow = G.uSnowCover.value;
+    car.physics.waterDepth = water.depthAt(car.physics.pos.x, car.physics.pos.z);
     const actor = driving ? car.object.position : player.object.position;
     wildlife.update(dt, cam.position, actor);
     flocks.setMonth(env.month);
+    fish.setMonth(env.month);
+    fish.update(dt, cam, camWater.mask > 0.3 && cam.position.y < camWater.level + 6, actor);
+    ghosts?.update(dt, cam, G.uNight.value);
+    volcano.update(dt, cam, window.innerHeight * engine.pixelRatio);
+    if (mode === 'fly' && !free) {
+      const body = water.sample(actor.x, actor.z).mask > 0.3 ? water.bodyAt(actor.x, actor.z) : null;
+      lore.update({
+        pos: actor,
+        driving,
+        underwater,
+        truckUnder: driving && car.physics.waterDepth > 1.7,
+        water: body,
+        agl: driving ? 1.5 : player.flight.agl,
+        night: G.uNight.value,
+        snowCover: G.uSnowCover.value,
+      });
+    }
+    sound.setFx(underwater ? 1 : 0, ghosts?.presence ?? 0, volcano.level);
     flocks.update(dt, cam.position, { x: air.windX, z: air.windZ });
     syncCarCasters();
     G.uHeadOn.value = car.object.visible ? car.headOn : 0;
@@ -571,14 +637,13 @@ async function boot() {
     updateSound(dt);
     sky.update(cam, env.exposure);
     engine.render(env.exposure, G.uNight.value, G.uTime.value);
-    schedule(frame);
   }
   // Background/headless tabs throttle rAF; ?timer keeps the loop alive for capture.
   const schedule = params.has('timer') ? (f: () => void) => setTimeout(f, 16) : requestAnimationFrame;
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
+    engine, env, terrain, water, waterSurface, fish, ghosts, volcano, journal, lore, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     /** Renders a frame and returns it as a JPEG data URL (debug capture). */
     snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {
@@ -592,6 +657,28 @@ async function boot() {
     },
     setMode,
     setDriving,
+    /** Debug: runs whole frames now, for captures from throttled background tabs. */
+    tick: (n = 1) => {
+      for (let i = 0; i < n; i++) step();
+    },
+    /** Debug: [x, y, z, tx, ty, tz, minAGL?] views → 'x|jpeg|jpeg…' (needs ?free). */
+    capture: (views: number[][], w = 700) => {
+      const shots = ['x'];
+      for (const v of views) {
+        const h = heightfield.height(v[0], v[2]);
+        (window as unknown as { freeLook: (...a: number[]) => void }).freeLook(v[0], Math.max(v[1], h + (v[6] ?? 3)), v[2], v[3], v[4], v[5]);
+        controls.keys.clear();
+        for (let i = 0; i < 6; i++) step();
+        engine.render(env.exposure, G.uNight.value, G.uTime.value);
+        const c = engine.renderer.domElement;
+        const o = document.createElement('canvas');
+        o.width = w;
+        o.height = Math.round((w * c.height) / c.width);
+        o.getContext('2d')!.drawImage(c, 0, 0, o.width, o.height);
+        shots.push(o.toDataURL('image/jpeg', 0.88));
+      }
+      return shots.join('|');
+    },
   });
 }
 
