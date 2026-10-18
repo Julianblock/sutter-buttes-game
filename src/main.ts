@@ -88,7 +88,8 @@ async function boot() {
 
   loading.progress('Growing the oak woodland', 0.95);
   const treeBuf = await fetch('data/trees.bin').then((r) => r.arrayBuffer());
-  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield);
+  const roadIndex = new RoadIndex(world.osm);
+  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex);
   engine.scene.add(trees.group);
   const seasonMonth = () => env.month - 1 + (env.day - 1) / 30;
   trees.setSeason(seasonMonth());
@@ -118,9 +119,9 @@ async function boot() {
   const sp = (params.get('spawn') || '-500,560,2600,3.1416').split(',').map(Number);
   player.flight.spawn(sp[0], sp[1], sp[2], sp[3]);
   engine.scene.add(player.object);
-  const roadIndex = new RoadIndex(world.osm);
   const car = new Vehicle(heightfield, roadIndex, heightfield.mid.size);
   car.model.setPaint((PAINTS.find((p) => p.id === settings.truck) ?? PAINTS[0]).hex);
+  car.physics.obstacles = (x, z, r) => trees.trunkHit(x, z, r);
   engine.scene.add(car.object);
 
   const shadow = new ShadowMap();
@@ -219,6 +220,7 @@ async function boot() {
       const p = car.physics;
       const fw = p.forward;
       player.flight.spawn(p.pos.x + fw.x * 2, p.pos.y + 4, p.pos.z + fw.z * 2, p.psi);
+      player.flight.gamma = 0.3;
       chase.snapFrom(cam, player.object.position);
     }
     player.object.visible = !d;
@@ -457,6 +459,11 @@ async function boot() {
       const input = drive.update(dt);
       if (controls.consume('KeyC')) driveCam.cycle();
       car.step(dt, input);
+      if (car.physics.crashed > 0) {
+        sound.crash(car.physics.crashed);
+        driveCam.shake = Math.min(1.5, car.physics.crashed / 6);
+        car.physics.crashed = 0;
+      }
       car.sync(dt, G.uNight.value, car.headlightsWanted(G.uNight.value, G.uFogDensity.value));
       driveCam.update(dt, car.physics, car.model, drive.consumeLook());
       hud.updateCar(dt, car.physics);
