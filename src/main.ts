@@ -53,6 +53,8 @@ import { Ghosts } from './life/ghosts';
 import { Discoveries } from './ui/discoveries';
 import { Lore } from './world/lore';
 import { VolcanoVision } from './world/volcano';
+import { isTouch } from './ui/device';
+import { TouchControls } from './ui/touch';
 
 function paletteFor(s: GameSettings): Palette {
   const sp = speciesById(s.bird) ?? SPECIES[0];
@@ -194,6 +196,20 @@ async function boot() {
         text: 'Pale shapes drift between the old stones, and fade the moment you come close. Whatever they are, the stories were true.',
       });
   ui.append(menu.root, hud.root, hud.help, journal.root);
+  const touch = isTouch ? new TouchControls(controls) : null;
+  if (touch) {
+    document.body.classList.add('touch');
+    hud.useTouch();
+    ui.append(touch.root);
+  }
+  /** Phones: go full screen in landscape when play starts (where the browser allows it). */
+  const immerse = () => {
+    if (!touch || document.fullscreenElement) return;
+    const el = document.documentElement;
+    el.requestFullscreen?.({ navigationUI: 'hide' })
+      .then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape'))
+      .catch(() => {});
+  };
 
   const free = params.has('free');
   const inspect = params.has('inspect');
@@ -247,6 +263,7 @@ async function boot() {
     mode = m;
     menu.show(m === 'menu');
     hud.show(m === 'fly');
+    touch?.show(m === 'fly');
     drive.enabled = m === 'fly' && driving;
     player.object.visible = !driving;
     if (m === 'fly') {
@@ -262,6 +279,7 @@ async function boot() {
   const setDriving = (d: boolean) => {
     driving = d;
     hud.setDriving(d);
+    touch?.setDriving(d);
     drive.enabled = d && mode === 'fly';
     if (d) {
       const f = player.flight;
@@ -331,12 +349,14 @@ async function boot() {
   };
   menu.onFly = () => {
     sound.start();
+    immerse();
     if (driving) setDriving(false);
     travel();
     setMode('fly');
   };
   menu.onDrive = () => {
     sound.start();
+    immerse();
     if (!driving) setDriving(true);
     travel();
     setMode('fly');
@@ -643,7 +663,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, water, waterSurface, fish, ghosts, volcano, journal, lore, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
+    touch, engine, env, terrain, water, waterSurface, fish, ghosts, volcano, journal, lore, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     /** Renders a frame and returns it as a JPEG data URL (debug capture). */
     snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {
