@@ -185,7 +185,7 @@ void main() {
 
   // Fresh snow buries everything but steep crags; open water stays dark slush.
   // Tree crowns, orchard rows and rice stubble stay dark through the blanket.
-  float snowed = snowAmount(n, xz) * (1.0 - rocky * 0.6) * (1.0 - canopy * 0.7) * (1.0 - orchard * 0.35) * (1.0 - rice * 0.2);
+  float snowed = snowAmount(n, xz, vWorld.y) * (1.0 - rocky * 0.6) * (1.0 - canopy * 0.7) * (1.0 - orchard * 0.35) * (1.0 - rice * 0.2);
   float drift = 0.88 + 0.12 * fbm(xz / 45.0 + 7.0, 3);
   alb = mix(alb, SNOW_ALB * drift * (0.94 + 0.06 * fine), snowed * (1.0 - waterFrac * 0.7));
   waterFrac *= 1.0 - snowed * 0.85;

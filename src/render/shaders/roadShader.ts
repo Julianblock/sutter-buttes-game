@@ -127,7 +127,7 @@ void main() {
 
   // Snow covers the road except where traffic has packed it into slushy tracks.
   float traffic = clamp(vInfo.z / 3.0, 0.2, 1.0) * onRoad;
-  float snowR = snowAmount(vec3(0.0, 1.0, 0.0), p) * (1.0 - ruts * 0.8 * traffic) * (1.0 - trackRut * 0.3);
+  float snowR = snowAmount(vec3(0.0, 1.0, 0.0), p, vWorld.y) * (1.0 - ruts * 0.8 * traffic) * (1.0 - trackRut * 0.3);
   vec3 slush = mix(vec3(0.32, 0.33, 0.34), SNOW_ALB, 0.25);
   alb = mix(alb, mix(slush, SNOW_ALB * 0.92, smoothstep(0.6, 0.95, snowR)), smoothstep(0.05, 0.4, snowR));
   film *= 1.0 - smoothstep(0.5, 0.9, snowR);

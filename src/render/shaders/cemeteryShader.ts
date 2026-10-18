@@ -150,7 +150,7 @@ void main() {
 
   alb = wetten(alb, porosity);
   rough = mix(rough, rough * 0.4, uWet);
-  float snow = snowAmount(n, wp.xz);
+  float snow = snowAmount(n, wp.xz, wp.y);
   alb = mix(alb, SNOW_ALB, smoothstep(0.1, 0.5, snow) * step(0.3, n.y));
 
   float shadow = shadowAt(wp + n * 0.05, 0.0008);

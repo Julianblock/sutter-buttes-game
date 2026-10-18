@@ -1,6 +1,21 @@
 import { atmosphereCommon } from './atmosphereCommon';
 import { noiseCommon } from './noise';
 
+/** Snow lying on a surface; needs `uSnowCover` and `vnoise` declared first. */
+export const snowCommon = /* glsl */ `
+/**
+ * Fraction of a surface under snow at height y: valley snow rarely survives
+ * more than patches, while the high Buttes whiten. Settles on upward faces only.
+ */
+float snowAmount(vec3 n, vec2 xz, float y) {
+  if (uSnowCover <= 0.0) return 0.0;
+  float patchy = vnoise(xz * 0.013) * 0.45 + vnoise(xz * 0.07) * 0.3 + vnoise(xz * 0.4) * 0.25;
+  float cover = uSnowCover * mix(0.35, 1.0, smoothstep(60.0, 420.0, y));
+  float c = cover * 1.25 - (1.0 - patchy) * 0.75;
+  return smoothstep(0.0, 0.3, c) * smoothstep(0.45, 0.85, n.y);
+}
+`;
+
 /** Uniform declarations + lighting helpers shared by every lit material. */
 export const lightingCommon = /* glsl */ `
 ${atmosphereCommon}
@@ -47,14 +62,7 @@ vec3 flashLight(vec3 n) {
   return vec3(0.75, 0.8, 1.0) * uFlash * 4.0 * uInvExposure * (0.35 + 0.65 * max(n.y, 0.0));
 }
 
-/** Fraction of a surface under snow: settles on upward faces, patchy while thin. */
-float snowAmount(vec3 n, vec2 xz) {
-  if (uSnowCover <= 0.0) return 0.0;
-  float patchy = vnoise(xz * 0.21) * 0.6 + vnoise(xz * 1.3) * 0.4;
-  float c = uSnowCover * 1.25 - (1.0 - patchy) * 0.5;
-  return smoothstep(0.0, 0.25, c) * smoothstep(0.35, 0.8, n.y);
-}
-
+${snowCommon}
 /** Soaked porous surfaces go darker and slightly more saturated. */
 vec3 wetten(vec3 alb, float porosity) {
   float w = uWet * porosity;

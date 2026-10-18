@@ -1,4 +1,4 @@
-import { lightingCommon } from './lighting';
+import { lightingCommon, snowCommon } from './lighting';
 import { noiseCommon } from './noise';
 import { terrainCommon } from './terrainCommon';
 import { windCommon } from './wind';
@@ -25,6 +25,7 @@ uniform float uGrassH;    // seasonal sward height (m)
 uniform float uSeedHead;  // 0..1 share of grasses in seed (late spring - summer)
 uniform vec4 uCar;        // player truck: x, z, sin(heading), cos(heading); 0 heading vector = none
 uniform float uSnowCover;
+${snowCommon}
 uniform float uRain;
 in float aBlade;          // blade index within the clump
 ${windCommon}
@@ -135,9 +136,10 @@ void main() {
   width *= wMul;
 
   // Snow buries short plants; taller ones poke through, bowed by its weight.
-  float snowDepth = uSnowCover * 0.22 * (0.6 + 0.8 * vnoise(root / 3.0));
+  float snowHere = snowAmount(vec3(0.0, 1.0, 0.0), root, terrainHeight(root));
+  float snowDepth = snowHere * 0.18 * (0.6 + 0.8 * vnoise(root / 3.0));
   if (height < snowDepth + 0.04) { collapse(); return; }
-  leanAmt += uSnowCover * 0.5 + uRain * 0.25;
+  leanAmt += snowHere * 0.5 + uRain * 0.25;
 
   float face = rb2 * 6.2832;
   vec3 across = vec3(cos(face), 0.0, sin(face));
@@ -186,7 +188,7 @@ void main() {
     }
   }
   // Snow caught on the upper blades.
-  col = mix(col, vec3(0.86, 0.89, 0.93), uSnowCover * smoothstep(0.3, 1.0, y) * (0.35 + 0.4 * rb1));
+  col = mix(col, vec3(0.86, 0.89, 0.93), snowHere * smoothstep(0.3, 1.0, y) * (0.25 + 0.3 * rb1));
   vColor = col;
 
   vec2 dc = p.xz - uCamPos.xz;
