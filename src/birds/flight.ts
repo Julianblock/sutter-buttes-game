@@ -115,6 +115,8 @@ export class FlightModel {
     const aTuck = g / (f.maxDive * f.maxDive);
     a = a + (aTuck - a) * inp.tuck;
     a *= 1 + 3.5 * inp.brake;
+    // Rain-soaked or snow-caked plumage: rougher, heavier, draggier.
+    a *= 1 + 0.3 * this.air.rain + 0.12 * this.air.snow;
     const b = (g * vStar * vStar) / (2 * LD) * (1 + inp.tuck * 2);
 
     // Bank: roll input commands a bank angle (not a roll rate), so letting go
@@ -144,7 +146,7 @@ export class FlightModel {
     // Thrust from flapping; strongest at low speed, fading past cruise.
     const flapWanted = Math.max(inp.flap, inp.boost, this.takeoffBoost > 0 ? 1 : 0);
     this.flapAmount = approach(this.flapAmount, flapWanted, 6, dt);
-    let T = this.flapAmount * f.flapPower * clamp(1.6 - V / (vStar * 1.6), 0, 1.4);
+    let T = this.flapAmount * f.flapPower * clamp(1.6 - V / (vStar * 1.6), 0, 1.4) * (1 - 0.15 * this.air.rain);
     if (f.hover && inp.brake > 0.3 && inp.flap > 0) T += g * 0.4;
     // Sprint: powered flight well past cruise, tailing off toward dive speeds.
     T += inp.boost * g * 0.55 * clamp(1.3 - V / (f.maxDive * 0.55), 0, 1);
