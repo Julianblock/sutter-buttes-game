@@ -230,7 +230,7 @@ export class CarModel {
     const uniforms = {
       ...G,
       uPaint: { value: new THREE.Color(PAINTS[0].hex) },
-      uHeadOn: { value: 0 },
+      uLampOn: { value: 0 },
       uBrake: { value: 0 },
       uSpeedFrac: { value: 0 },
       uRpmFrac: { value: 0 },
@@ -315,7 +315,7 @@ export class CarModel {
     this.steering.rotation.x = -steer * 8;
     const u = this.material.uniforms;
     u.uBrake.value = brake;
-    u.uHeadOn.value = headOn;
+    u.uLampOn.value = headOn;
     u.uSpeedFrac.value = speedFrac;
     u.uRpmFrac.value = rpmFrac;
   }

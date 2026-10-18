@@ -50,7 +50,7 @@ export const carFragment = /* glsl */ `
 ${lightingCommon}
 #include <logdepthbuf_pars_fragment>
 uniform vec3 uPaint;
-uniform float uHeadOn;
+uniform float uLampOn;
 uniform float uBrake;
 uniform float uSpeedFrac;
 uniform float uRpmFrac;
@@ -116,12 +116,12 @@ void main() {
     alb = vec3(0.6);
     rough = 0.1;
     coat = 1.0;
-    emit = vec3(1.0, 0.92, 0.78) * uHeadOn * 6.0;
+    emit = vec3(1.0, 0.92, 0.78) * uLampOn * 6.0;
   } else if (part == 5) {
     alb = vec3(0.25, 0.01, 0.01);
     rough = 0.15;
     coat = 0.8;
-    emit = vec3(1.0, 0.03, 0.01) * (uHeadOn * 0.8 + uBrake * 3.0);
+    emit = vec3(1.0, 0.03, 0.01) * (uLampOn * 0.8 + uBrake * 3.0);
   } else if (part == 6) {
     alb = vec3(0.02);
     rough = 0.9;
@@ -153,7 +153,8 @@ void main() {
   vec3 col = shadeSurface(alb, n, vWorld, ao, rough, shadow);
   if (part == 3 || part == 7 || part == 8 || part == 10 || inside) {
     // Light bouncing into the cab through the glass.
-    vec3 fill = skyAmbient(vec3(0.0, 1.0, 0.0), 1.0) * 0.5 + sunRadiance(vWorld.y) * max(uSunDir.y, 0.04) * 0.15;
+    float sunUp = smoothstep(-0.03, 0.05, uSunDir.y);
+    vec3 fill = skyAmbient(vec3(0.0, 1.0, 0.0), 1.0) * 0.5 + sunRadiance(vWorld.y) * max(uSunDir.y, 0.04) * 0.15 * sunUp;
     col += alb * fill * (0.55 + 0.45 * max(n.y, 0.0));
   }
   if (coat > 0.0) {
@@ -163,7 +164,7 @@ void main() {
     vec3 env = skyRadianceDir(normalize(vec3(R.x, max(R.y, 0.02), R.z)));
     env *= mix(0.25, 1.0, smoothstep(-0.2, 0.3, R.y));
     col += env * F * coat;
-    col += sunRadiance(vWorld.y) * shadow * pow(max(dot(R, uSunDir), 0.0), 600.0) * 30.0 * F * coat;
+    col += sunRadiance(vWorld.y) * shadow * pow(max(dot(R, uSunDir), 0.0), 600.0) * 30.0 * F * coat * smoothstep(-0.02, 0.03, uSunDir.y);
   }
   col += emit * uInvExposure * mix(0.15, 1.0, uNight);
   col = applyAtmosphere(col, vWorld);
@@ -190,11 +191,11 @@ void main() {
   float F = 0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
   vec3 env = skyRadianceDir(normalize(vec3(R.x, max(R.y, 0.02), R.z)));
   float shadow = shadowAt(vWorld, 0.0006);
-  vec3 sun = sunRadiance(vWorld.y) * shadow * pow(max(dot(R, uSunDir), 0.0), 900.0) * 40.0;
+  vec3 sun = sunRadiance(vWorld.y) * shadow * pow(max(dot(R, uSunDir), 0.0), 900.0) * 40.0 * smoothstep(-0.02, 0.03, uSunDir.y);
   vec3 refl = (env + sun) * F;
   // Premultiplied: reflections add, the tint absorbs some of what's behind.
   float absorb = inside ? 0.06 : 0.28;
-  vec3 col = refl * (inside ? 0.35 : 1.0) + vec3(0.003, 0.005, 0.006) * absorb;
+  vec3 col = refl * (inside ? 0.35 : 1.0);
   col *= segmentTransmittance(vWorld);
   outColor = vec4(col, absorb);
 }
