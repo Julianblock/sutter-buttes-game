@@ -14,6 +14,9 @@ The terrain, land cover, roads, buildings and trees all come from real survey da
 - **Vegetation.** About 1.4 million trees: blue oak and valley oak woodland detected from the imagery, plus almond, walnut and prune orchards planted on survey grids, with bloom and leaf colour that change by season.
 - **Wildlife.** Grazing cattle, black-tailed deer, wild turkeys and coyotes that flee when you swoop low. Snow goose skeins, vulture kettles, egrets and blackbird murmurations, all varying by season.
 - **Roads and traffic.** Cars, pickups and big rigs drive the real road network, including Pass Road through the Buttes. Headlights and taillights show at night.
+- **Ranch tracks.** The private dirt tracks that wind into the range are mapped too: two-rut adobe lanes with a grassy crown that turn to mud in the rain. A graded one leaves North Butte Road for the slopes of North Butte.
+- **Old cemeteries.** North Butte Cemetery (the "witches' cemetery") sits at the end of a long dirt lane off North Butte Road under a big valley oak, with weathered marble tablets, obelisks, toppled and broken stones, an iron fence and a "closed sunset to sunrise" sign. Noyesburg, Stohlman and the tiny Pugh family plot are built from their real outlines too.
+- **Places.** The menu's Places tab starts you on Pass Road, North Butte Road, West Butte Road, at the cemetery gate or on the ranch track to North Butte.
 - **Weather.** Clear, haze, scattered cloud, overcast, tule fog, rain, thunderstorms and snow. Rain soaks the ground and roads into reflective puddles with raindrop rings; snow builds up on fields, trees, roads and the truck, then melts depending on the season and sun. Lightning lights up the valley, and its thunder arrives late by the strike's distance. Wet roads cut tyre grip and can aquaplane the truck, fields turn to mud, snow makes everything slide, and showers bring downdrafts and turbulence that weigh a bird down.
 - **Drive a pickup.** Swap between bird and truck at any time. The truck has a first-person cockpit with live gauges, headlights, wipers, dust and spray trails, and collisions with trees.
 - **Structures.** Farmhouses, metal sheds, rice silos and the South Butte antenna farm with blinking beacons. Towns get lit windows, porch lights and streetlights.
@@ -58,7 +61,7 @@ npm run build
 npm run data      # rebuild public/data from USGS / USDA / OSM sources
 ```
 
-Debug URL parameters: `?fly` skips the menu, `?drive` starts in the truck, `?weather=rain` (or `storm`, `snow`, `tulefog`, …) and `?time=midday` pick conditions, and `?free&cam=x,y,z,yaw,pitch` starts a free camera.
+Debug URL parameters: `?fly` skips the menu, `?drive` starts in the truck, `?weather=rain` (or `storm`, `snow`, `tulefog`, …) and `?time=midday` pick conditions, `?place=cemetery` (or `pass`, `northbutte`, `westbutte`, `track`) picks the start point, and `?free&cam=x,y,z,yaw,pitch` starts a free camera.
 
 ## Data sources
 
