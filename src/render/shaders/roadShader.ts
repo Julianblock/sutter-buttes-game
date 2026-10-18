@@ -70,6 +70,21 @@ void main() {
   vec3 gravel = mix(vec3(0.21, 0.18, 0.14), vec3(0.29, 0.25, 0.19), vnoise(p * 2.1));
   float onRoad = 1.0 - smoothstep(halfW - 0.08, halfW + 0.08, ax);
   vec3 alb = mix(gravel, asphalt, onRoad);
+  // Ranch track: two packed wheel ruts in bare adobe dirt, the crown and
+  // verges thinning into whatever the hillside grows (the terrain beneath).
+  float trackA = 1.0;
+  float trackRut = 0.0;
+  if (style == 5) {
+    float wob = (vnoise(vec2(along * 0.05, 3.1)) - 0.5) * 0.5;
+    float tx = abs(x - wob);
+    trackRut = band(tx, 0.5, 1.15, 0.22) * (0.75 + 0.25 * vnoise(vec2(along * 0.2, x * 2.0)));
+    vec3 dirt = mix(vec3(0.27, 0.22, 0.16), vec3(0.36, 0.3, 0.22), vnoise(p * 1.7));
+    dirt *= 0.9 + 0.2 * vnoise(p * 9.0);
+    alb = mix(dirt * 1.08, dirt * 0.9, trackRut);
+    float crown = 0.35 + 0.25 * vnoise(p * 1.3);
+    trackA = mix(crown, 1.0, trackRut) * (1.0 - smoothstep(halfW * 0.7, halfW + 0.1, tx));
+    onRoad = 0.0;
+  }
 
   // US road markings, faded with wear.
   float wear = 0.65 + 0.35 * vnoise(vec2(along * 0.08, x * 0.3));
@@ -107,10 +122,12 @@ void main() {
   float ruts = band(lane, 0.5, 1.1, 0.3) + band(lane, 2.4, 3.0, 0.3);
   float film = smoothstep(0.15, 0.8, uWet) * mix(0.35, 0.75, onRoad);
   film = max(film, smoothstep(0.62, 0.78, dips + ruts * 0.08 * onRoad) * smoothstep(0.4, 0.9, uWet));
+  film = max(film, smoothstep(0.55, 0.75, dips * trackRut) * smoothstep(0.3, 0.8, uWet));
+  alb *= 1.0 - 0.25 * trackRut * uWet;
 
   // Snow covers the road except where traffic has packed it into slushy tracks.
   float traffic = clamp(vInfo.z / 3.0, 0.2, 1.0) * onRoad;
-  float snowR = snowAmount(vec3(0.0, 1.0, 0.0), p) * (1.0 - ruts * 0.8 * traffic);
+  float snowR = snowAmount(vec3(0.0, 1.0, 0.0), p) * (1.0 - ruts * 0.8 * traffic) * (1.0 - trackRut * 0.3);
   vec3 slush = mix(vec3(0.32, 0.33, 0.34), SNOW_ALB, 0.25);
   alb = mix(alb, mix(slush, SNOW_ALB * 0.92, smoothstep(0.6, 0.95, snowR)), smoothstep(0.05, 0.4, snowR));
   film *= 1.0 - smoothstep(0.5, 0.9, snowR);
@@ -121,8 +138,8 @@ void main() {
   col = wetSurface(col, n, vWorld, film, shadow);
   col = applyAtmosphere(col, vWorld);
   // Fade the ribbon into the orthophoto (which already shows the road) far away.
-  float fade = 1.0 - smoothstep(2500.0, 6000.0, dist);
+  float fade = 1.0 - (style == 5 ? smoothstep(900.0, 2500.0, dist) : smoothstep(2500.0, 6000.0, dist));
   float edgeFade = 1.0 - smoothstep(0.8, 1.0, abs(vRoad.x));
-  outColor = vec4(col, fade * edgeFade);
+  outColor = vec4(col, fade * edgeFade * trackA);
 }
 `;
