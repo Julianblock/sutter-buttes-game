@@ -105,7 +105,14 @@ export function planCemeteries(osm: OsmData, radius = 14000): CemeteryPlan[] {
     let gate: [number, number] | null = null;
     let out: [number, number] = [1, 0];
     let along: [number, number] = [0, 1];
-    if (best < 800) {
+    const lane = mappedLane(osm, poly);
+    if (lane) {
+      // A mapped track already runs to the plot: gate where it meets the fence.
+      gate = lane.gate;
+      out = lane.out;
+      along = lane.along;
+      osm.roads.push({ name: c.name || 'Cemetery lane', kind: 'track', grade: 2, lanes: 0, pts: [lane.end[0], lane.end[1], gate[0], gate[1], cx, cz] });
+    } else if (best < 800) {
       // Gate in the middle of the fence side facing the road.
       let gd = Infinity;
       for (let i = 0; i + 3 < poly.length; i += 2) {
@@ -128,6 +135,37 @@ export function planCemeteries(osm: OsmData, radius = 14000): CemeteryPlan[] {
     plans.push({ name: c.name, poly, cx, cz, gate, out, along, trees: shadeTrees(c.name, poly, cx, cz, gate) });
   }
   return plans;
+}
+
+/** An OSM track ending at the plot boundary, with the gate where it arrives. */
+function mappedLane(osm: OsmData, poly: number[]) {
+  for (const r of osm.roads) {
+    if (r.kind !== 'track' || r.name) continue;
+    const p = r.pts;
+    const n = p.length;
+    for (const [ex, ez, px, pz] of [
+      [p[0], p[1], p[2], p[3]],
+      [p[n - 2], p[n - 1], p[n - 4], p[n - 3]],
+    ]) {
+      let gd = Infinity;
+      let gate: [number, number] = [ex, ez];
+      let along: [number, number] = [1, 0];
+      for (let i = 0; i + 3 < poly.length; i += 2) {
+        const [x, z, d] = closest(ex, ez, poly[i], poly[i + 1], poly[i + 2], poly[i + 3]);
+        if (d < gd) {
+          gd = d;
+          gate = [x, z];
+          const l = Math.hypot(poly[i + 2] - poly[i], poly[i + 3] - poly[i + 1]) || 1;
+          along = [(poly[i + 2] - poly[i]) / l, (poly[i + 3] - poly[i + 1]) / l];
+        }
+      }
+      if (gd > 20) continue;
+      const ox = px - ex, oz = pz - ez;
+      const ol = Math.hypot(ox, oz) || 1;
+      return { end: [ex, ez] as [number, number], gate, along, out: [ox / ol, oz / ol] as [number, number] };
+    }
+  }
+  return null;
 }
 
 /** A big valley oak spreading over the middle of the plot, a few lesser trees round it. */
