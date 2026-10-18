@@ -24,6 +24,8 @@ export interface Thermal {
  */
 export class AirField {
   sun = 1; // 0..1 thermal-generating insolation
+  rain = 0; // rainfall 0..1: cooled downdrafts, storm turbulence, soggy feathers
+  snow = 0;
   windX = 3;
   windZ = 1.2;
   thermalTop = 1600;
@@ -88,6 +90,14 @@ export class AirField {
     this.hf.normal(x, z, this.n, 12);
     const slopeUp = -(this.n.x * this.windX + this.n.z * this.windZ) / Math.max(this.n.y, 0.2);
     const ridge = slopeUp * Math.exp(-Math.max(agl, 0) / 180);
+    // Showers drag cold air down with them; storms churn it.
+    if (this.rain > 0.01) {
+      const t = this.time;
+      const cell = 0.5 + 0.5 * Math.sin(x * 0.0021 + t * 0.05) * Math.sin(z * 0.0017 - t * 0.04);
+      w -= this.rain * (0.3 + 1.2 * cell);
+      const gusty = this.rain * 1.3 + Math.hypot(this.windX, this.windZ) * 0.06;
+      w += gusty * (Math.sin(x * 0.013 + t * 0.9) * Math.sin(z * 0.011 - t * 0.7) + 0.5 * Math.sin((x + z) * 0.031 + t * 2.3) + 0.3 * Math.sin(y * 0.05 + t * 3.7));
+    }
     this.lastThermal = w;
     this.lastRidge = ridge;
     return w + ridge;
