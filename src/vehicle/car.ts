@@ -12,6 +12,8 @@ export interface DriveInput {
   boost: number;
 }
 
+export type ObstacleQuery = (x: number, z: number, radius: number) => { nx: number; nz: number; depth: number } | null;
+
 export const emptyDriveInput = (): DriveInput => ({ throttle: 0, brake: 0, steer: 0, handbrake: 0, boost: 0 });
 
 export interface Surface {
@@ -58,6 +60,11 @@ export class CarPhysics {
   slip = 0;
   surface: Surface = PAVED;
   road: RoadHit | null = null;
+  /** Speed of the latest collision (m/s), decaying; drives shake and sound. */
+  impact = 0;
+  /** Set for one frame when a new collision happens. */
+  crashed = 0;
+  obstacles?: ObstacleQuery;
   private pitchV = 0;
   private rollV = 0;
   private surfaceT = 0;
@@ -118,6 +125,7 @@ export class CarPhysics {
   }
 
   update(dt: number, inp: DriveInput) {
+    this.impact = Math.max(0, this.impact - dt * 8);
     this.surfaceT -= dt;
     if (this.surfaceT <= 0) {
       this.sampleSurface();
@@ -190,6 +198,7 @@ export class CarPhysics {
     this.vel.copy(nf).multiplyScalar(vf).addScaledVector(nr, vr);
     this.speed = vf;
     this.pos.addScaledVector(this.vel, dt);
+    this.collide(nf);
     const L = this.limit;
     if (Math.abs(this.pos.x) > L || Math.abs(this.pos.z) > L) {
       this.pos.x = THREE.MathUtils.clamp(this.pos.x, -L, L);
@@ -207,6 +216,24 @@ export class CarPhysics {
     this.rpm += (rpmT - this.rpm) * (1 - Math.exp(-dt * 6));
 
     this.updatePose(dt);
+  }
+
+  private collide(f: THREE.Vector3) {
+    if (!this.obstacles) return;
+    for (const off of [1.45, -1.45]) {
+      const hit = this.obstacles(this.pos.x + f.x * off, this.pos.z + f.z * off, 1.02);
+      if (!hit) continue;
+      this.pos.x += hit.nx * hit.depth;
+      this.pos.z += hit.nz * hit.depth;
+      const vn = this.vel.x * hit.nx + this.vel.z * hit.nz;
+      if (vn < 0) {
+        this.vel.x -= hit.nx * vn * 1.2;
+        this.vel.z -= hit.nz * vn * 1.2;
+        this.vel.multiplyScalar(0.85);
+        if (-vn > 1.5 && -vn > this.impact * 0.5) this.crashed = -vn;
+        this.impact = Math.max(this.impact, -vn);
+      }
+    }
   }
 
   private updatePose(dt: number) {
