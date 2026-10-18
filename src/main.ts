@@ -411,6 +411,16 @@ async function boot() {
   Object.assign(window, {
     engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
+    /** Renders a frame and returns it as a JPEG data URL (debug capture). */
+    snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {
+      engine.render(env.exposure, G.uNight.value, G.uTime.value);
+      const c = engine.renderer.domElement;
+      const o = document.createElement('canvas');
+      o.width = w;
+      o.height = Math.round((w * c.height * ch) / (c.width * cw));
+      o.getContext('2d')!.drawImage(c, x0 * c.width, y0 * c.height, cw * c.width, ch * c.height, 0, 0, o.width, o.height);
+      return o.toDataURL('image/jpeg', 0.88);
+    },
     setMode,
   });
 }
