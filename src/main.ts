@@ -37,6 +37,7 @@ import { Hud } from './ui/hud';
 import { loadSettings, saveSettings, type GameSettings } from './ui/settings';
 import { RoadIndex } from './world/roadIndex';
 import { Fences } from './world/fences';
+import { Cemeteries, planCemeteries } from './world/cemetery';
 import { Vehicle } from './vehicle/vehicle';
 import { PAINTS } from './vehicle/carModel';
 import { DriveControls } from './vehicle/driveControls';
@@ -91,8 +92,9 @@ async function boot() {
 
   loading.progress('Growing the oak woodland', 0.95);
   const treeBuf = await fetch('data/trees.bin').then((r) => r.arrayBuffer());
+  const cemeteryPlans = planCemeteries(world.osm);
   const roadIndex = new RoadIndex(world.osm);
-  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex);
+  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex, cemeteryPlans.flatMap((p) => p.trees));
   engine.scene.add(trees.group);
   const seasonMonth = () => env.month - 1 + (env.day - 1) / 30;
   trees.setSeason(seasonMonth());
@@ -106,6 +108,8 @@ async function boot() {
   const props = new Props(world.osm, heightfield, power.pylons);
   const lights = new LightPoints(props.lights);
   engine.scene.add(props.group, lights.points, power.mesh);
+  const cemeteries = new Cemeteries(cemeteryPlans, heightfield);
+  engine.scene.add(cemeteries.group);
   const roads = new Roads(world.osm, heightfield);
   engine.scene.add(roads.group);
   const fences = new Fences(world.osm, heightfield, roadIndex);
@@ -136,6 +140,7 @@ async function boot() {
   const shadow = new ShadowMap();
   trees.addShadowCasters(shadow);
   props.addShadowCasters(shadow);
+  cemeteries.addShadowCasters(shadow);
   wildlife.addShadowCasters(shadow);
   player.shadowCaster = shadow.addCaster(player.model.geometry, createBirdShadowMaterial(), player.object);
   const carCasters = car.model.addShadows((g, m, f) => shadow.addCaster(g, m, f));
@@ -547,7 +552,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
+    engine, env, terrain, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     /** Renders a frame and returns it as a JPEG data URL (debug capture). */
     snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {
