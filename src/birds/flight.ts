@@ -31,6 +31,9 @@ function approach(x: number, target: number, rate: number, dt: number) {
 
 export type FlightState = 'flying' | 'perched';
 
+/** Water surface under a point: height and how surely it is a channel (0..1). */
+export type WaterQuery = (x: number, z: number) => { level: number; mask: number };
+
 /**
  * Point-mass flight dynamics with a species-specific drag polar:
  *   dV/dt = T - D - g sinγ,  dγ/dt = g/V (n cosφ - cosγ),  dψ/dt = -g n sinφ / (V cosγ)
@@ -54,6 +57,11 @@ export class FlightModel {
   velocity = new THREE.Vector3();
   groundHeight = 0;
   agl = 100;
+  /** Water surface under the bird, or -1000 over dry land. */
+  waterLevel = -1000;
+  /** Paddling about under the surface after a plunge. */
+  swimming = false;
+  water?: WaterQuery;
   private euler = new THREE.Euler(0, 0, 0, 'YXZ');
   private walkSpeed = 0;
   private hopTimer = 0;
@@ -84,7 +92,11 @@ export class FlightModel {
   update(dt: number, inp: FlightInput) {
     this.groundHeight = this.hf.height(this.pos.x, this.pos.z);
     this.agl = this.pos.y - this.groundHeight;
+    const w = this.water?.(this.pos.x, this.pos.z);
+    this.waterLevel = w && w.mask > 0.3 && w.level > this.groundHeight + 0.25 ? w.level : -1000;
+    this.swimming = this.state === 'flying' && this.pos.y < this.waterLevel - 0.08;
     if (this.state === 'perched') this.updatePerched(dt, inp);
+    else if (this.swimming) this.updateSwimming(dt, inp);
     else this.updateFlying(dt, inp);
     this.updatePose(dt, inp);
     const pitch = this.state === 'perched' ? -0.12 : this.gamma + this.alpha;
@@ -175,9 +187,15 @@ export class FlightModel {
     this.pos.addScaledVector(this.velocity, dt);
     this.climbRate = approach(this.climbRate, this.velocity.y, 3, dt);
 
-    // Ground contact.
-    const ground = this.hf.height(this.pos.x, this.pos.z);
-    const clearance = 0.12 + this.species.shape.legLen * 0.6;
+    // A steep, fast plunge punches through the surface like an osprey's.
+    if (this.pos.y < this.waterLevel && this.gamma < -0.45 && this.speed > f.stall * 1.6) {
+      this.speed *= 0.35;
+      this.pos.y = Math.min(this.pos.y, this.waterLevel - 0.25);
+      return;
+    }
+    // Ground contact (a gentle touchdown on water floats).
+    const ground = Math.max(this.hf.height(this.pos.x, this.pos.z), this.waterLevel);
+    const clearance = this.pos.y < this.waterLevel + 1 ? 0.02 : 0.12 + this.species.shape.legLen * 0.6;
     if (this.pos.y < ground + clearance) {
       const gentle = this.speed < f.stall * 1.9 && this.gamma > -0.5;
       this.pos.y = ground + clearance;
@@ -207,8 +225,17 @@ export class FlightModel {
     this.walkSpeed = approach(this.walkSpeed, want * Math.sqrt(this.species.shape.length * 2), 6, dt);
     this.pos.x += Math.sin(this.psi) * this.walkSpeed * dt;
     this.pos.z += Math.cos(this.psi) * this.walkSpeed * dt;
-    const ground = this.hf.height(this.pos.x, this.pos.z);
-    this.pos.y = ground + 0.02 + this.species.shape.legLen * 0.9;
+    const land = this.hf.height(this.pos.x, this.pos.z);
+    const afloat = this.waterLevel > land;
+    this.pos.y = afloat ? this.waterLevel + 0.02 : land + 0.02 + this.species.shape.legLen * 0.9;
+    if (afloat && inp.tuck > 0.5) {
+      // Duck under from the surface.
+      this.state = 'flying';
+      this.speed = 1.5;
+      this.gamma = -0.7;
+      this.pos.y = this.waterLevel - 0.3;
+      return;
+    }
     this.hopTimer += dt * Math.abs(this.walkSpeed) * 6;
     this.velocity.set(0, 0, 0);
     this.climbRate = 0;
@@ -218,6 +245,50 @@ export class FlightModel {
       this.gamma = 0.55;
       this.takeoffBoost = 1.6;
       this.pos.y += 0.3;
+    }
+  }
+
+  /** Under water: buoyant, slow, steered like a cormorant with the wings half shut. */
+  private updateSwimming(dt: number, inp: FlightInput) {
+    const f = this.species.flight;
+    this.psi -= (inp.roll * 1.5 + inp.yaw * 0.5) * dt;
+    this.phi = approach(this.phi, inp.roll * 0.5, 4, dt);
+    this.gamma = approach(this.gamma, clamp(inp.pitch * 1.1 - inp.tuck * 0.8 + 0.12, -1.2, 1.2), 2.5, dt);
+    const push = Math.max(inp.flap, inp.boost);
+    this.flapAmount = approach(this.flapAmount, push * 0.7, 5, dt);
+    this.speed = approach(this.speed, 1.0 + 2.8 * push, 1.6, dt);
+    this.alpha = approach(this.alpha, 0, 4, dt);
+    this.load = 1;
+    this.airLift = 0;
+    const fw = this.forward;
+    this.velocity.copy(fw).multiplyScalar(this.speed);
+    this.velocity.y += 0.45 * (1 - inp.tuck);
+    this.pos.addScaledVector(this.velocity, dt);
+    this.climbRate = approach(this.climbRate, this.velocity.y, 3, dt);
+    const bed = this.hf.height(this.pos.x, this.pos.z) + 0.15;
+    if (this.pos.y < bed) {
+      this.pos.y = bed;
+      this.gamma = Math.max(this.gamma, 0.2);
+    }
+    // Leaving the channel sideways: the bank stops us.
+    const w = this.water?.(this.pos.x, this.pos.z);
+    const level = w && w.mask > 0.3 ? w.level : -1000;
+    if (this.pos.y >= level - 0.05) {
+      this.pos.y = Math.max(this.pos.y, bed);
+      if (push > 0.5 && inp.pitch > 0.3) {
+        this.state = 'flying';
+        this.speed = f.stall * 1.1;
+        this.gamma = 0.55;
+        this.takeoffBoost = 1.4;
+        this.pos.y = Math.max(level, bed) + 0.3;
+      } else if (level > -500) {
+        this.state = 'perched';
+        this.speed = 0;
+        this.gamma = 0;
+        this.phi = 0;
+        this.walkSpeed = 0;
+        this.pos.y = level + 0.02;
+      }
     }
   }
 
@@ -240,7 +311,7 @@ export class FlightModel {
       return;
     }
     const speedFold = clamp((this.speed - f.cruise * 1.35) / (f.maxDive * 0.7 - f.cruise * 1.35), 0, 1);
-    const fold = clamp(Math.max(speedFold * 0.55, inp.tuck * 0.92), 0, 0.95);
+    const fold = this.swimming ? 0.7 : clamp(Math.max(speedFold * 0.55, inp.tuck * 0.92), 0, 0.95);
     const hz = f.flapHz * (1 + 0.35 * this.flapAmount * (this.speed < f.stall * 1.3 ? 1 : 0));
     if (this.flapAmount > 0.02) this.flapPhase += dt * hz * Math.PI * 2;
     else this.flapPhase = approach(this.flapPhase, Math.ceil(this.flapPhase / (Math.PI * 2)) * Math.PI * 2, 4, dt);
