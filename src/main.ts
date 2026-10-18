@@ -510,12 +510,12 @@ async function boot() {
     trees.update(cam);
     grass.setCar(car.physics.pos.x, car.physics.pos.z, car.physics.psi, car.object.visible);
     grass.update(cam.position, seasonMonth());
-    motes.update(cam, heightfield.height(cam.position.x, cam.position.z), window.innerHeight * engine.pixelRatio, 1 - G.uNight.value * 0.9);
+    motes.update(cam, heightfield.height(cam.position.x, cam.position.z), window.innerHeight * engine.pixelRatio, (1 - G.uNight.value * 0.9) * (1 - Math.min(1, (G.uRain.value + G.uSnowFall.value) * 4)) * (1 - G.uWet.value * 0.7));
     lights.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.lights.resize(cam, window.innerHeight * engine.pixelRatio);
     power.resize(cam, window.innerHeight * engine.pixelRatio);
     fences.update(cam, heightfield.height(cam.position.x, cam.position.z), window.innerHeight * engine.pixelRatio);
-    traffic.update(dt, cam.position, G.uNight.value);
+    traffic.update(dt, cam.position, G.uNight.value, Math.max(G.uNight.value, murky() ? 0.35 : 0), 1 - 0.2 * G.uWet.value - 0.35 * G.uSnowCover.value);
     const sw = G.uSeason.value;
     dust.update(dt, car.physics, driving && mode === 'fly', Math.min(1, sw.z + sw.w * 0.8 + sw.y * 0.2), cam, window.innerHeight * engine.pixelRatio);
     precip.update(dt, cam, window.innerHeight * engine.pixelRatio, car.object.visible ? car.object.matrixWorld : null);
