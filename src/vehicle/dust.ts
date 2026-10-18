@@ -98,9 +98,17 @@ export class DustTrail {
     const speed = Math.abs(car.speed);
     let kind = 0;
     let rate = 0;
+    // Wet or snow-covered ground doesn't raise dust; it throws spray and powder.
+    const wet = G.uWet.value;
+    const snow = G.uSnowCover.value;
+    dryness *= (1 - wet) * (1 - snow);
+    let mist = false;
     if (active && speed > 2) {
       if (s === 'water') (kind = 2), (rate = speed * 9);
+      else if (snow > 0.3 && s !== 'mud') (kind = 2), (mist = true), (rate = speed * 3 * snow);
       else if (s === 'mud') (kind = 1), (rate = speed * 4);
+      else if (s === 'paved' && wet > 0.25) (kind = 2), (mist = true), (rate = Math.max(0, speed - 5) * 4 * wet);
+      else if ((s === 'grass' || s === 'orchard') && wet > 0.5) (kind = 1), (rate = speed * 2.5 * wet);
       else if (s === 'gravel') rate = speed * 3.2 * (0.4 + 0.6 * dryness);
       else if (s === 'grass' || s === 'orchard') rate = speed * 2.6 * dryness;
       else if (s === 'paved') rate = car.slip > 0.4 ? speed * 2 * car.slip : 0; // tyre smoke
@@ -116,8 +124,8 @@ export class DustTrail {
       const back = -WHEELBASE / 2 - 0.3;
       const x = car.pos.x + f.x * back + r.x * side * TRACK * 0.5;
       const z = car.pos.z + f.z * back + r.z * side * TRACK * 0.5;
-      const smoke = s === 'paved';
-      const kick = kind === 2 ? 2.5 : kind === 1 ? 1.6 : 0.6;
+      const smoke = s === 'paved' && kind === 0;
+      const kick = mist ? 1.0 : kind === 2 ? 2.5 : kind === 1 ? 1.6 : 0.6;
       this.parts.push({
         x: x + (Math.random() - 0.5) * 0.4,
         y: car.pos.y + 0.2,
@@ -126,9 +134,9 @@ export class DustTrail {
         vy: kick * (0.6 + Math.random()),
         vz: car.vel.z * 0.35 + r.z * side * kick * Math.random() + (Math.random() - 0.5),
         age: 0,
-        life: kind === 0 ? (smoke ? 2.5 : 4 + Math.random() * 3) : 0.7 + Math.random() * 0.5,
-        size: kind === 0 ? 0.8 : 0.35,
-        grow: kind === 0 ? (smoke ? 1.2 : 1.9) : 0.6,
+        life: mist ? 2 + Math.random() * 0.6 : kind === 0 ? (smoke ? 2.5 : 4 + Math.random() * 3) : 0.7 + Math.random() * 0.5,
+        size: mist ? 0.6 : kind === 0 ? 0.8 : 0.35,
+        grow: mist ? 1.4 : kind === 0 ? (smoke ? 1.2 : 1.9) : 0.6,
         kind: smoke ? 2 : kind,
         seed: Math.random(),
       });
