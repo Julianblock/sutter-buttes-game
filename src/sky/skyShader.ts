@@ -177,7 +177,7 @@ void main() {
   float sac = pow(max(dot(dh, normalize(vec2(0.15, 1.0))), 0.0), 10.0);
   // Low cloud reflects the town lights back down as an orange ceiling glow.
   float glow = mix(hz, 0.35 + 0.65 * hz, deck) * (1.0 + deck * 1.5);
-  col += vec3(1.0, 0.55, 0.25) * (yuba * 0.0018 + sac * 0.0022 + 0.00004 + deck * 0.0005) * glow * uNight;
+  col += vec3(1.0, 0.55, 0.25) * (yuba * 0.0018 + sac * 0.0022 + 0.00004 + deck * 0.00008) * glow * uNight;
 
   vec4 cl = cloudLayer(dir) * clearSky;
   col = col * (1.0 - cl.a) + cl.rgb;

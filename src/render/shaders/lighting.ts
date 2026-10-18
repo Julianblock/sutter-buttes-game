@@ -93,7 +93,7 @@ vec3 deckIrradiance() {
 vec3 deckRadiance(vec3 dir) {
   vec3 Lz = deckIrradiance() * 9.0 / (7.0 * PI);
   float up = dir.y >= 0.0 ? (1.0 + 2.0 * dir.y) / 3.0 : 0.33 - dir.y * 0.1;
-  return Lz * up + vec3(0.0006, 0.0005, 0.0004) * uNight;
+  return Lz * up + vec3(0.00014, 0.00012, 0.0001) * uNight;
 }
 
 vec3 sunRadiance(float altitude) {
