@@ -124,7 +124,7 @@ export class CarPhysics {
 
   /** Places the car on the road nearest to (x, z), facing along it. */
   spawn(x: number, z: number, preferPsi?: number) {
-    const hit = this.roads.find(x, z, 8000, (k) => k !== 'residential') ?? this.roads.find(x, z);
+    const hit = this.roads.find(x, z, 8000, (k) => k !== 'residential' && k !== 'track') ?? this.roads.find(x, z);
     let psi = preferPsi ?? 0;
     if (hit) {
       x = hit.x;
