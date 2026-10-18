@@ -41,6 +41,8 @@ uniform sampler2D uImgFar;
 uniform sampler2D uMaskA;
 uniform sampler2D uMaskB;
 uniform float uLcSize;
+uniform float uVision;
+uniform vec3 uVolcano;
 uniform vec4 uVeg;      // grass green, oak leaf-out, wildflowers, wetland flooding
 uniform vec4 uRice;     // flooded, sprouting, mature green, golden/harvested
 uniform vec4 uOrchard;  // bare, almond blossom, fruit blossom, autumn colour
@@ -162,6 +164,16 @@ void main() {
   waterFrac = max(waterFrac, puddle * (0.6 + 0.4 * max(rice, orchard)));
   waterFrac *= smoothstep(0.30, 0.12, slope);
 
+  // Riverbeds and pond floors under the real water surface: silt, no puddles.
+  vec2 wl = waterAt(xz);
+  float wDepth = wl.x - vWorld.y;
+  float under = wl.y > 0.01 ? clamp(wDepth / 0.25, 0.0, 1.0) : 0.0;
+  if (under > 0.0) {
+    vec3 silt = mix(vec3(0.085, 0.078, 0.055), vec3(0.15, 0.13, 0.09), vnoise(xz / 3.0));
+    alb = mix(alb, silt, under * smoothstep(0.0, 1.2, wDepth) * 0.75);
+    waterFrac *= 1.0 - under;
+  }
+
   // Soaked soil and grass darken; rock less so.
   alb = wetten(alb, 1.0 - rocky * 0.5);
 
@@ -185,13 +197,23 @@ void main() {
 
   // Fresh snow buries everything but steep crags; open water stays dark slush.
   // Tree crowns, orchard rows and rice stubble stay dark through the blanket.
-  float snowed = snowAmount(n, xz, vWorld.y) * (1.0 - rocky * 0.6) * (1.0 - canopy * 0.7) * (1.0 - orchard * 0.35) * (1.0 - rice * 0.2);
+  float snowed = snowAmount(n, xz, vWorld.y) * (1.0 - rocky * 0.6) * (1.0 - canopy * 0.7) * (1.0 - orchard * 0.35) * (1.0 - rice * 0.2) * (1.0 - under);
   float drift = 0.88 + 0.12 * fbm(xz / 45.0 + 7.0, 3);
   alb = mix(alb, SNOW_ALB * drift * (0.94 + 0.06 * fine), snowed * (1.0 - waterFrac * 0.7));
   waterFrac *= 1.0 - snowed * 0.85;
 
   float shadow = shadowAt(vWorld + n * 0.6, 0.00025);
   vec3 color = shadeSurface(alb, n, vWorld, ao, mix(0.92, 0.62, uWet * (1.0 - snowed)), shadow);
+  if (under > 0.0) {
+    // Ripples on the surface focus sunlight into a dancing net on the bed.
+    vec2 q = xz * 0.8;
+    float t = uTime;
+    float ca = vnoise(ROT * q + vec2(t * 0.31, t * 0.17));
+    float cb = vnoise(ROT_P * q * 1.6 - vec2(t * 0.22, -t * 0.27) + 4.0);
+    float net = pow(clamp(1.0 - abs(ca + cb - 1.0) * 2.4, 0.0, 1.0), 5.0);
+    color += alb / PI * sunRadiance(wl.x) * max(uSunDir.y, 0.0) * shadow * net * 1.4
+           * exp(-wDepth * 0.5) * under * smoothstep(1.5, 0.3, fp);
+  }
 
   if (waterFrac > 0.01) {
     vec3 wn = rippleNormal(xz, dist);
@@ -207,6 +229,19 @@ void main() {
     vec3 body = color * 0.75;
     vec3 water = mix(body, refl, F) + sun * glint * F + moonRadiance(vWorld.y) * glintM * F;
     color = mix(color, water, waterFrac);
+  }
+
+  if (uVision > 0.0) {
+    // The core 1.6 million years ago: fresh black lava, ash-dark slopes and
+    // incandescent flows threading down from the domes.
+    float core = smoothstep(uVolcano.z, uVolcano.z * 0.45, length(xz - uVolcano.xy)) * uVision;
+    color *= 1.0 - core * 0.7;
+    vec2 wq = xz / 260.0 + vec2(fbm(xz / 900.0, 3), fbm(xz / 900.0 + 9.0, 3)) * 2.2;
+    float vein = 1.0 - smoothstep(0.0, 0.045, abs(fbm(wq, 4) - 0.5));
+    float high = smoothstep(120.0, 480.0, vWorld.y);
+    float pulse = 0.75 + 0.25 * sin(uTime * 1.7 + fbm(xz / 80.0, 2) * 9.0);
+    vec3 lava = mix(vec3(1.0, 0.16, 0.02), vec3(1.0, 0.55, 0.15), vein * high);
+    color += lava * vein * (0.2 + high) * pulse * core * 6.0 * uInvExposure;
   }
 
   color = applyAtmosphere(color, vWorld);
