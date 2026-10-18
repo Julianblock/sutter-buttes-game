@@ -237,6 +237,17 @@ export class SoundScape {
   }
 
   /** The player's own species call (key V). */
+  /** Truck hitting something: low body thud plus a crunch, scaled by impact speed. */
+  crash(speed: number) {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running') return;
+    const t = ctx.currentTime;
+    const k = Math.min(1, speed / 12);
+    this.noiseBurst(t, 0.35 + k * 0.3, 140, 0.8, 0.5 * k + 0.1, this.master, 'lowpass');
+    this.noiseBurst(t + 0.01, 0.18 + k * 0.25, 1800, 0.7, 0.25 * k + 0.03, this.master, 'bandpass');
+    this.tone(t, 'sine', [[0, 70], [0.25, 38]], [[0.01, 0.4 * k + 0.08], [0.35, 0.0001]], this.master);
+  }
+
   call(speciesId: string) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime + 0.02;
