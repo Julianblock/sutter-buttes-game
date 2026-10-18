@@ -210,7 +210,7 @@ void main() {
   alb *= 1.0 + 0.28 * vGust * vY;
   // Blades scatter light like a canopy: bias normals upward.
   n = normalize(n + vec3(0.0, 0.9, 0.0));
-  float shadow = shadowAt(vWorld + vec3(0.0, 0.3, 0.0), 0.0012);
+  float shadow = shadowAt(vWorld + vec3(0.0, 0.3, 0.0), 0.0004);
   float ao = mix(0.3, 1.0, vY);
   vec3 col = shadeSurface(alb, n, vWorld, ao, mix(0.75, 0.5, vGust), shadow);
   // Light through thin blades when looking toward the sun.
