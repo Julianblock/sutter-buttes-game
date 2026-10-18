@@ -98,6 +98,8 @@ export class CarPhysics {
   /** Ground wetness and snow cover 0..1 (fed from the environment). */
   wet = 0;
   snow = 0;
+  /** Depth of river or pond water at the truck (m). */
+  waterDepth = 0;
   road: RoadHit | null = null;
   /** Speed of the latest collision (m/s), decaying; drives shake and sound. */
   impact = 0;
@@ -154,8 +156,13 @@ export class CarPhysics {
   }
 
   private sampleSurface() {
-    this.base = this.groundType();
+    this.base = this.waterDepth > 0.3 ? WATER : this.groundType();
     this.surface = weathered(this.base, this.wet, this.snow, this.speed);
+    if (this.waterDepth > 0.3) {
+      // Wading, then crawling along the bed with the cab flooded.
+      const d = Math.min(this.waterDepth, 4);
+      this.surface = { ...this.surface, label: d > 1.6 ? 'underwater' : 'wading', top: Math.max(1.2, 5 - d * 1.1), roll: 0.25 + d * 0.12 };
+    }
   }
 
   private groundType(): Surface {
