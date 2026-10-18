@@ -33,8 +33,34 @@ uniform float uTerrainShadowSize;
 uniform vec3 uHeadPos;
 uniform vec3 uHeadDir;
 uniform float uHeadOn;
+uniform float uWet;
+uniform float uSnowCover;
+uniform float uRain;
+uniform float uSnowFall;
+uniform float uFlash;
 
 const float CLOUD_BASE = 1800.0;
+const vec3 SNOW_ALB = vec3(0.86, 0.89, 0.93);
+
+/** Lightning lights the world from the cloud base (display units). */
+vec3 flashLight(vec3 n) {
+  return vec3(0.75, 0.8, 1.0) * uFlash * 4.0 * uInvExposure * (0.35 + 0.65 * max(n.y, 0.0));
+}
+
+/** Fraction of a surface under snow: settles on upward faces, patchy while thin. */
+float snowAmount(vec3 n, vec2 xz) {
+  if (uSnowCover <= 0.0) return 0.0;
+  float patchy = vnoise(xz * 0.21) * 0.6 + vnoise(xz * 1.3) * 0.4;
+  float c = uSnowCover * 1.25 - (1.0 - patchy) * 0.5;
+  return smoothstep(0.0, 0.25, c) * smoothstep(0.35, 0.8, n.y);
+}
+
+/** Soaked porous surfaces go darker and slightly more saturated. */
+vec3 wetten(vec3 alb, float porosity) {
+  float w = uWet * porosity;
+  return mix(alb, alb * alb * 2.2 + alb * 0.25, w * 0.6) * mix(1.0, 0.62, w);
+}
+
 
 vec3 transmittanceAt(float altitude, vec3 dir) {
   float r = R_GROUND + max(altitude, 0.0);
@@ -43,14 +69,41 @@ vec3 transmittanceAt(float altitude, vec3 dir) {
 }
 
 /** Direct radiance of the sun (and moon) arriving at a point, before shadowing. */
+/** 0 .. 1: how fully a thick rain / snow cloud deck hides the sky. */
+float overcastDeck() {
+  return smoothstep(0.0, 0.2, max(uRain, uSnowFall));
+}
+
+/** Fraction of light at the cloud top that diffuses through the deck. */
+float deckTransmission() {
+  return mix(0.3, 0.12, uRain) + uSnowFall * 0.08;
+}
+
+/** Irradiance on the top of the cloud deck from the sun and moon. */
+vec3 deckIrradiance() {
+  vec3 Es = SUN_ILLUMINANCE * transmittanceAt(CLOUD_BASE, uSunDir) * max(uSunDir.y, 0.0);
+  vec3 Em = SUN_ILLUMINANCE * uMoonScale * transmittanceAt(CLOUD_BASE, uMoonDir) * max(uMoonDir.y, 0.0);
+  // Multiple scattering in the deck washes out most of the sunset reddening.
+  vec3 E = Es + Em;
+  E = mix(E, vec3(dot(E, vec3(0.2126, 0.7152, 0.0722))), 0.75);
+  return E * deckTransmission() * vec3(0.93, 0.96, 1.0);
+}
+
+/** CIE overcast sky: zenith three times brighter than the horizon. */
+vec3 deckRadiance(vec3 dir) {
+  vec3 Lz = deckIrradiance() * 9.0 / (7.0 * PI);
+  float up = dir.y >= 0.0 ? (1.0 + 2.0 * dir.y) / 3.0 : 0.33 - dir.y * 0.1;
+  return Lz * up + vec3(0.0006, 0.0005, 0.0004) * uNight;
+}
+
 vec3 sunRadiance(float altitude) {
   float horizon = smoothstep(-0.01, 0.02, uSunDir.y);
-  return SUN_ILLUMINANCE * transmittanceAt(altitude, uSunDir) * horizon;
+  return SUN_ILLUMINANCE * transmittanceAt(altitude, uSunDir) * horizon * (1.0 - 0.95 * overcastDeck());
 }
 
 vec3 moonRadiance(float altitude) {
   float horizon = smoothstep(-0.01, 0.03, uMoonDir.y);
-  return SUN_ILLUMINANCE * uMoonScale * transmittanceAt(altitude, uMoonDir) * horizon * vec3(0.9, 0.95, 1.08);
+  return SUN_ILLUMINANCE * uMoonScale * transmittanceAt(altitude, uMoonDir) * horizon * vec3(0.9, 0.95, 1.08) * (1.0 - 0.97 * overcastDeck());
 }
 
 vec3 skyRadianceDir(vec3 dir) {
@@ -60,7 +113,9 @@ vec3 skyRadianceDir(vec3 dir) {
   vec2 dh = normalize(dir.xz + vec2(0.0, 1e-5));
   vec3 s = texture(uSkyViewLUT, skyViewUV(r, dir.y, dot(dh, sh))).rgb;
   vec3 m = texture(uMoonViewLUT, skyViewUV(r, dir.y, dot(dh, mh))).rgb;
-  return s + m * uMoonScale;
+  float deck = overcastDeck();
+  vec3 clear = s + m * uMoonScale;
+  return deck > 0.0 ? mix(clear, deckRadiance(dir), deck) : clear;
 }
 
 /** Hemispherical sky irradiance for a surface normal, with warm ground bounce. */
@@ -72,9 +127,15 @@ vec3 skyAmbient(vec3 n, float ao) {
   // Light bounced off sunlit ground (albedo ~0.2) onto surfaces that face it.
   vec3 groundIrr = up + SUN_ILLUMINANCE * transmittanceAt(0.0, uSunDir) * max(uSunDir.y, 0.0);
   vec3 bounce = groundIrr * 0.2 * vec3(1.0, 0.86, 0.66) * (1.0 - t);
+  float deck = overcastDeck();
+  if (deck > 0.0) {
+    vec3 E = deckIrradiance();
+    sky = mix(sky, E * mix(0.4, 1.0, t * t), deck);
+    bounce = mix(bounce, E * 0.15 * (1.0 - t), deck);
+  }
   // Starlight + airglow floor so moonless nights are not pitch black.
   vec3 night = vec3(0.0009, 0.0012, 0.002) * uNight;
-  return (sky + bounce + night) * ao;
+  return (sky + bounce + night + flashLight(n)) * ao;
 }
 
 float cloudCoverage(vec2 xz) {
@@ -213,6 +274,54 @@ vec3 headlight(vec3 albedo, vec3 n, vec3 wp) {
   float ndl = max(dot(n, -l), 0.0);
   float att = smoothstep(0.8, 2.5, dist) / (dist * dist + 4.0);
   return albedo / PI * vec3(1.0, 0.93, 0.8) * 2400.0 * uInvExposure * beam * att * ndl * uHeadOn * smoothstep(140.0, 60.0, dist);
+}
+
+/** Expanding rings where raindrops hit standing water (normal xz offset). */
+vec2 rainRipples(vec2 xz) {
+  if (uRain <= 0.01) return vec2(0.0);
+  vec2 g = xz * 2.2;
+  vec2 id = floor(g);
+  vec2 sum = vec2(0.0);
+  for (int j = 0; j <= 1; j++) {
+    for (int i = 0; i <= 1; i++) {
+      vec2 c = id + vec2(float(i), float(j));
+      vec2 o = hash22(c);
+      float t = fract(uTime * 1.4 + hash12(c + 7.3));
+      vec2 d = (g - c) - o;
+      float r = length(d);
+      float ring = t * 0.7;
+      float w = sin((r - ring) * 38.0) * smoothstep(0.1, 0.0, abs(r - ring)) * (1.0 - t);
+      sum += d / max(r, 1e-3) * w;
+    }
+  }
+  return sum * 0.35 * min(1.0, uRain * 1.6);
+}
+
+/**
+ * Wet surface layer: mirror sky reflection, sun glint and headlight glare on a
+ * film of water. \`film\` is 0 (damp) .. 1 (standing puddle).
+ */
+vec3 wetSurface(vec3 col, vec3 n, vec3 wp, float film, float shadow) {
+  if (film <= 0.001) return col;
+  vec3 V = normalize(uCamPos - wp);
+  vec2 rip = rainRipples(wp.xz) * smoothstep(60.0, 12.0, distance(uCamPos, wp));
+  vec3 wn = normalize(mix(n, vec3(0.0, 1.0, 0.0), film) + vec3(rip.x, 0.0, rip.y));
+  vec3 R = reflect(-V, wn);
+  R.y = abs(R.y) + 0.01;
+  float F = 0.02 + 0.98 * pow(1.0 - max(dot(wn, V), 0.0), 5.0);
+  vec3 refl = skyRadianceDir(normalize(R)) * cloudShadow(wp + R * 400.0);
+  refl += flashLight(vec3(0.0, 1.0, 0.0)) * 0.4;
+  float glint = pow(max(dot(R, uSunDir), 0.0), mix(60.0, 900.0, film)) * mix(1.5, 140.0, film);
+  refl += sunRadiance(wp.y) * shadow * glint;
+  // Oncoming headlight glare streaks along wet asphalt toward the viewer.
+  if (uHeadOn > 0.0) {
+    vec3 L = normalize(uHeadPos - wp);
+    float hd = distance(uHeadPos, wp);
+    float g = pow(max(dot(R, L), 0.0), mix(20.0, 300.0, film));
+    refl += vec3(1.0, 0.93, 0.8) * g * 60.0 * uInvExposure * uHeadOn / (1.0 + hd * hd * 0.02);
+  }
+  float k = F * mix(0.55, 1.0, film);
+  return mix(col * mix(1.0, 0.7, film), refl, k);
 }
 
 /** Shared diffuse + specular shading for opaque surfaces. */
