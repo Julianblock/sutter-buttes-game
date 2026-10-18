@@ -36,6 +36,7 @@ import { Menu } from './ui/menu';
 import { Hud } from './ui/hud';
 import { loadSettings, saveSettings, type GameSettings } from './ui/settings';
 import { RoadIndex } from './world/roadIndex';
+import { Fences } from './world/fences';
 import { Vehicle } from './vehicle/vehicle';
 import { PAINTS } from './vehicle/carModel';
 import { DriveControls } from './vehicle/driveControls';
@@ -105,6 +106,8 @@ async function boot() {
   engine.scene.add(props.group, lights.points, power.mesh);
   const roads = new Roads(world.osm, heightfield);
   engine.scene.add(roads.group);
+  const fences = new Fences(world.osm, heightfield, roadIndex);
+  engine.scene.add(fences.group);
   const traffic = new Traffic(world.osm, heightfield);
   engine.scene.add(traffic.group);
   const wildlife = new Wildlife(heightfield);
@@ -493,6 +496,7 @@ async function boot() {
     lights.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.lights.resize(cam, window.innerHeight * engine.pixelRatio);
     power.resize(cam, window.innerHeight * engine.pixelRatio);
+    fences.update(cam, heightfield.height(cam.position.x, cam.position.z), window.innerHeight * engine.pixelRatio);
     traffic.update(dt, cam.position, G.uNight.value);
     const actor = driving ? car.object.position : player.object.position;
     wildlife.update(dt, cam.position, actor);
@@ -519,7 +523,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, car, driveCam, roadIndex, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
+    engine, env, terrain, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     /** Renders a frame and returns it as a JPEG data URL (debug capture). */
     snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {
