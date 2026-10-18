@@ -217,7 +217,7 @@ void main() {
   // Snow lodges on the tops of branches and leaf clumps.
   vec3 gn = normalize(vNormal);
   if (!gl_FrontFacing) gn = -gn;
-  float snowT = snowAmount(normalize(gn + n * 0.5), vWorld.xz * 2.0 + vWorld.y) * (vLeaf > 0.5 ? 0.9 : 0.75);
+  float snowT = snowAmount(normalize(gn + n * 0.5), vWorld.xz * 2.0 + vWorld.y, vWorld.y) * (vLeaf > 0.5 ? 0.25 : 0.35);
   albedo = mix(albedo, SNOW_ALB, snowT);
   thin *= 1.0 - snowT;
 
