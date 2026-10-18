@@ -107,15 +107,19 @@ vec3 moonRadiance(float altitude) {
   return SUN_ILLUMINANCE * uMoonScale * transmittanceAt(altitude, uMoonDir) * horizon * vec3(0.9, 0.95, 1.08) * (1.0 - 0.97 * overcastDeck());
 }
 
-vec3 skyRadianceDir(vec3 dir) {
+vec3 clearSkyRadianceDir(vec3 dir) {
   float r = R_GROUND + max(uCamPos.y, 1.0) + 2.0;
   vec2 sh = normalize(uSunDir.xz + vec2(1e-5, 0.0));
   vec2 mh = normalize(uMoonDir.xz + vec2(1e-5, 0.0));
   vec2 dh = normalize(dir.xz + vec2(0.0, 1e-5));
   vec3 s = texture(uSkyViewLUT, skyViewUV(r, dir.y, dot(dh, sh))).rgb;
   vec3 m = texture(uMoonViewLUT, skyViewUV(r, dir.y, dot(dh, mh))).rgb;
+  return s + m * uMoonScale;
+}
+
+vec3 skyRadianceDir(vec3 dir) {
   float deck = overcastDeck();
-  vec3 clear = s + m * uMoonScale;
+  vec3 clear = clearSkyRadianceDir(dir);
   return deck > 0.0 ? mix(clear, deckRadiance(dir), deck) : clear;
 }
 
@@ -214,9 +218,9 @@ float fogDepth(float y0, float y1, float d) {
   return uFogDensity * d * inside;
 }
 
-/** Optical depth of falling rain / snow (visibility ~3 km in heavy rain, ~2 km in snow). */
+/** Optical depth of falling rain / snow (visibility ~3 km in heavy rain, ~6 km in steady snow). */
 float precipDepth(float d) {
-  return (uRain * 0.0009 + uSnowFall * 0.0017) * min(d, 30000.0);
+  return (uRain * 0.0009 + uSnowFall * 0.00028) * min(d, 30000.0);
 }
 
 /** Transmittance of the camera-to-point segment (air and tule fog), for emitters. */
