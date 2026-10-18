@@ -76,7 +76,7 @@ async function boot() {
   const settings = loadSettings(params);
   const env = new Environment();
   env.season = settings.season;
-  env.weather = settings.weather;
+  env.setWeather(settings.weather);
   env.moon = settings.moon;
   env.timeFlow = settings.timeFlow;
   env.setPreset(settings.time);
@@ -174,7 +174,7 @@ async function boot() {
         env.setPreset(s.time);
         break;
       case 'weather':
-        env.weather = s.weather;
+        env.setWeather(s.weather);
         break;
       case 'moon':
         env.moon = s.moon;
