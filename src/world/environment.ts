@@ -374,6 +374,12 @@ export class Environment {
     }
     if (sunAlt < -10) e *= THREE.MathUtils.lerp(1.6, 0.55, Math.min(1, moonScale / 9e-5));
     if (sunAlt > 0) e *= (1 + cloud * 0.9) * (1 - 0.2 * this.rain);
+    // Auto-exposure opens up under a rain / snow deck (matches deckTransmission()).
+    const deck = THREE.MathUtils.smoothstep(Math.max(this.rain, this.snowFall), 0, 0.2);
+    if (deck > 0 && sunAlt > -6) {
+      const deckT = THREE.MathUtils.lerp(0.3, 0.12, this.rain) + this.snowFall * 0.08;
+      e *= THREE.MathUtils.lerp(1, 0.85 / deckT, deck);
+    }
     return e;
   }
 }
