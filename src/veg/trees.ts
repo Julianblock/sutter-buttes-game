@@ -9,6 +9,14 @@ import { SPECIES_COUNT, treeFragment, treeVertex } from './treeShader';
 
 export const TREE = { BLUE_OAK: 0, LIVE_OAK: 1, VALLEY_OAK: 2, COTTONWOOD: 3, SHRUB: 4, ALMOND: 5, WALNUT: 6, PRUNE: 7 } as const;
 
+export interface PlantedTree {
+  x: number;
+  z: number;
+  r: number;
+  h: number;
+  sp: number;
+}
+
 const TILE = 250;
 const LOD0 = 170;
 const LOD1 = 1900;
@@ -92,7 +100,8 @@ export class Trees {
   private tileMap = new Map<number, Tile>();
   private zone = 0;
 
-  constructor(buf: ArrayBuffer, zone: number, hf: Heightfield, private roads?: RoadIndex) {
+  /** Hand-placed trees on top of those detected in the imagery (cemetery oaks). */
+  constructor(buf: ArrayBuffer, zone: number, hf: Heightfield, private roads?: RoadIndex, private planted: PlantedTree[] = []) {
     const leafCol = Array.from({ length: SPECIES_COUNT }, () => new THREE.Color());
     const bark = BARK.map((h) => new THREE.Color(h));
     this.material = new THREE.ShaderMaterial({
@@ -181,10 +190,14 @@ export class Trees {
   }
 
   private decode(buf: ArrayBuffer, zone: number, hf: Heightfield) {
-    this.zone = zone;
+    // Tiles cover the imagery zone, widened to take any hand-planted trees outside it.
+    let grid = zone;
+    for (const t of this.planted) grid = Math.max(grid, 2 * Math.max(Math.abs(t.x), Math.abs(t.z)) + 2 * TILE);
+    grid = Math.ceil(grid / (2 * TILE)) * 2 * TILE;
+    this.zone = grid;
     const v = new DataView(buf);
     const n = buf.byteLength / 6;
-    const tilesN = Math.ceil(zone / TILE);
+    const tilesN = Math.ceil(grid / TILE);
     const lists: number[][] = Array.from({ length: tilesN * tilesN }, () => []);
     for (let k = 0; k < n; k++) {
       const x = (v.getUint16(k * 6, true) / 65535 - 0.5) * zone;
@@ -228,12 +241,21 @@ export class Trees {
           tz = road.z + nz * clear;
         }
       }
-      const ti = Math.floor((tx + zone / 2) / TILE);
-      const tj = Math.floor((tz + zone / 2) / TILE);
+      const ti = Math.floor((tx + grid / 2) / TILE);
+      const tj = Math.floor((tz + grid / 2) / TILE);
       if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) continue;
       lists[tj * tilesN + ti].push(tx, hf.height(tx, tz) - 0.35, tz, seed * 6.2831, r, h, sp, hash(seed * 17.3));
     }
-    this.plantOrchards(zone, hf, (ti, tj, ...vals) => {
+    this.planted.forEach((t, k) => {
+      const ti = Math.floor((t.x + grid / 2) / TILE);
+      const tj = Math.floor((t.z + grid / 2) / TILE);
+      if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) return;
+      const seed = hash(k * 3.17 + 0.5);
+      lists[tj * tilesN + ti].push(t.x, hf.height(t.x, t.z) - 0.35, t.z, seed * 6.2831, t.r, t.h, t.sp, hash(seed * 17.3));
+    });
+    this.plantOrchards(zone, hf, (...vals) => {
+      const ti = Math.floor((vals[0] + grid / 2) / TILE);
+      const tj = Math.floor((vals[2] + grid / 2) / TILE);
       if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) return;
       const road = this.roads?.nearest(vals[0], vals[2], 12);
       if (road && road.dist < road.halfWidth + 1.8) return;
@@ -252,8 +274,8 @@ export class Trees {
         const tile: Tile = {
           data: new Float32Array(l),
           count: l.length / 8,
-          cx: -zone / 2 + (ti + 0.5) * TILE,
-          cz: -zone / 2 + (tj + 0.5) * TILE,
+          cx: -grid / 2 + (ti + 0.5) * TILE,
+          cz: -grid / 2 + (tj + 0.5) * TILE,
           minY,
           maxY,
         };
@@ -265,7 +287,7 @@ export class Trees {
   }
 
   /** Rows of almond, walnut and prune trees filling every orchard land-cover cell. */
-  private plantOrchards(zone: number, hf: Heightfield, add: (ti: number, tj: number, ...v: number[]) => void) {
+  private plantOrchards(zone: number, hf: Heightfield, add: (...v: number[]) => void) {
     const half = zone / 2;
     let k = 0;
     for (const key of Object.keys(ORCHARD)) {
@@ -278,9 +300,7 @@ export class Trees {
           const y = hf.height(x, z);
           const r = o.r * (0.85 + seed * 0.3);
           const h = o.h * (0.9 + hash(seed * 7.7) * 0.2);
-          const ti = Math.floor((x + half) / TILE);
-          const tj = Math.floor((z + half) / TILE);
-          add(ti, tj, x + (seed - 0.5) * 0.4, y - 0.3, z, seed * 6.2831, r, h, o.sp, hash(seed * 17.3));
+          add(x + (seed - 0.5) * 0.4, y - 0.3, z, seed * 6.2831, r, h, o.sp, hash(seed * 17.3));
           k++;
         }
       }
