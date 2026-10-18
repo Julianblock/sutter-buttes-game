@@ -1,14 +1,16 @@
 import { SPECIES, speciesById, type Palette } from '../birds/species';
 import { MOONS, SEASONS, TIMES, WEATHERS } from '../world/environment';
 import { PAINTS } from '../vehicle/carModel';
+import { DESTINATIONS } from '../world/destinations';
 import type { GameSettings } from './settings';
 
-type Tab = 'bird' | 'plumage' | 'truck' | 'season' | 'time' | 'sky';
+type Tab = 'bird' | 'plumage' | 'truck' | 'places' | 'season' | 'time' | 'sky';
 
 const TABS: [Tab, string][] = [
   ['bird', 'Bird'],
   ['plumage', 'Plumage'],
   ['truck', 'Truck'],
+  ['places', 'Places'],
   ['season', 'Season'],
   ['time', 'Time'],
   ['sky', 'Sky'],
@@ -42,6 +44,8 @@ export class Menu {
   onChange: (s: GameSettings, what: keyof GameSettings) => void = () => {};
   onFly: () => void = () => {};
   onDrive: () => void = () => {};
+  /** Start point picked in the Places tab, used by the next Take Flight / Drive. */
+  place: string | null = null;
 
   constructor(private s: GameSettings) {
     const panel = el('div', 'panel');
@@ -114,6 +118,17 @@ export class Menu {
         );
         break;
       }
+      case 'places':
+        this.renderChoice(
+          DESTINATIONS.map((d) => [d.id, d.label, d.blurb]),
+          this.place ?? '',
+          (id) => {
+            this.place = this.place === id ? null : id;
+            this.render();
+          },
+        );
+        this.pane.append(el('p', 'lede', 'Pick a place, then <b>Take Flight</b> to soar in above it or <b>Drive</b> to start there in the truck.'));
+        break;
       case 'season':
         this.renderChoice(
           Object.entries(SEASONS).map(([id, v]) => [id, v.label, v.blurb]),
