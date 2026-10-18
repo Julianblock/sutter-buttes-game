@@ -60,9 +60,10 @@ export class Precipitation {
     this.mesh.visible = geo.instanceCount > 0;
 
     if (dt > 0) {
+      const step = cam.position.distanceTo(this.lastCam);
       const v = cam.position.clone().sub(this.lastCam).divideScalar(dt);
       // Teleports (respawns, view switches) would smear every drop.
-      if (v.length() > 120) v.set(0, 0, 0);
+      if (step > 4 || v.length() > 90) v.set(0, 0, 0);
       this.camVel.lerp(v, Math.min(1, dt * 8));
     }
     this.lastCam.copy(cam.position);
