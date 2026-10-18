@@ -1,0 +1,12 @@
+{
+  "name": "Sutter Buttes — Flight of the Middle Mountain",
+  "short_name": "Sutter Buttes",
+  "description": "Fly as a native bird over the Sutter Buttes, the world's smallest mountain range.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
