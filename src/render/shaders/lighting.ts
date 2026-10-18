@@ -249,14 +249,16 @@ vec3 applyAtmosphere(vec3 color, vec3 wp) {
   float dFull = hitsGround(rCam, dy) ? min(distanceToGround(rCam, dy), 400000.0) : 400000.0;
   vec3 tauFull = RAYLEIGH_SCAT * layerDepth(y0, dy, dFull, RAYLEIGH_H)
                + vec3(MIE_EXT * uMieScale) * layerDepth(y0, dy, dFull, MIE_H);
-  vec3 sky = skyRadianceDir(dir);
-  vec3 inscatter = sky * clamp((1.0 - T) / max(1.0 - exp(-tauFull), vec3(1e-4)), 0.0, 1.0);
+  vec3 inscatter = clearSkyRadianceDir(dir) * clamp((1.0 - T) / max(1.0 - exp(-tauFull), vec3(1e-4)), 0.0, 1.0);
+  // Under a deck the LUT no longer applies: haze just scatters the flat grey light.
+  float deck = overcastDeck();
+  if (deck > 0.0) inscatter = mix(inscatter, deckRadiance(vec3(0.0, 0.02, 0.0)) * 0.8 * (1.0 - T), deck);
   color = color * T + inscatter;
 
   float pd = precipDepth(d);
   if (pd > 0.0) {
     float Tp = exp(-pd);
-    color = color * Tp + deckRadiance(vec3(0.0, 0.15, 0.0)) * 0.95 * (1.0 - Tp);
+    color = color * Tp + deckRadiance(vec3(0.0, 0.02, 0.0)) * 0.8 * (1.0 - Tp);
   }
 
   float fog = fogDepth(y0, wp.y, d);
