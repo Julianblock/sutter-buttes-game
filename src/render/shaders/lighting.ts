@@ -267,6 +267,9 @@ vec3 applyAtmosphere(vec3 color, vec3 wp) {
   return color;
 }
 
+/** Low-beam intensity in scene radiance units: dazzling at night, faint by day. */
+const float HEADLIGHT_I = 4.5;
+
 /** Player truck low beams: wide, sharp cutoff just above the horizon. */
 vec3 headlight(vec3 albedo, vec3 n, vec3 wp) {
   if (uHeadOn <= 0.0) return vec3(0.0);
@@ -284,7 +287,7 @@ vec3 headlight(vec3 albedo, vec3 n, vec3 wp) {
   beam *= smoothstep(0.1, 0.5, fwd);
   float ndl = max(dot(n, -l), 0.0);
   float att = smoothstep(0.8, 2.5, dist) / (dist * dist + 4.0);
-  return albedo / PI * vec3(1.0, 0.93, 0.8) * 2400.0 * uInvExposure * beam * att * ndl * uHeadOn * smoothstep(140.0, 60.0, dist);
+  return albedo / PI * vec3(1.0, 0.93, 0.8) * HEADLIGHT_I * beam * att * ndl * uHeadOn * smoothstep(140.0, 60.0, dist);
 }
 
 /** Expanding rings where raindrops hit standing water (normal xz offset). */
@@ -329,7 +332,7 @@ vec3 wetSurface(vec3 col, vec3 n, vec3 wp, float film, float shadow) {
     vec3 L = normalize(uHeadPos - wp);
     float hd = distance(uHeadPos, wp);
     float g = pow(max(dot(R, L), 0.0), mix(20.0, 300.0, film));
-    refl += vec3(1.0, 0.93, 0.8) * g * 60.0 * uInvExposure * uHeadOn / (1.0 + hd * hd * 0.02);
+    refl += vec3(1.0, 0.93, 0.8) * g * HEADLIGHT_I * 0.025 * uHeadOn / (1.0 + hd * hd * 0.02);
   }
   float k = F * mix(0.55, 1.0, film);
   return mix(col * mix(1.0, 0.7, film), refl, k);
