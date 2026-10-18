@@ -22,6 +22,8 @@ export function roadSpec(r: OsmRoad): { half: number; style: number; rank: numbe
       return { half: 3.3, style: 1, rank: 3 };
     case 'unclassified':
       return { half: 2.8, style: 0, rank: 1 };
+    case 'track':
+      return { half: (r.grade ?? 0) > 0 && (r.grade ?? 0) <= 2 ? 2.0 : 1.6, style: 5, rank: -1 };
     default:
       return { half: 4.0, style: 0, rank: 0 };
   }
