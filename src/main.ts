@@ -35,6 +35,11 @@ import { LoadingScreen } from './ui/loading';
 import { Menu } from './ui/menu';
 import { Hud } from './ui/hud';
 import { loadSettings, saveSettings, type GameSettings } from './ui/settings';
+import { RoadIndex } from './world/roadIndex';
+import { Vehicle } from './vehicle/vehicle';
+import { PAINTS } from './vehicle/carModel';
+import { DriveControls } from './vehicle/driveControls';
+import { DriveCamera } from './vehicle/driveCamera';
 
 function paletteFor(s: GameSettings): Palette {
   const sp = speciesById(s.bird) ?? SPECIES[0];
@@ -113,17 +118,24 @@ async function boot() {
   const sp = (params.get('spawn') || '-500,560,2600,3.1416').split(',').map(Number);
   player.flight.spawn(sp[0], sp[1], sp[2], sp[3]);
   engine.scene.add(player.object);
+  const roadIndex = new RoadIndex(world.osm);
+  const car = new Vehicle(heightfield, roadIndex, heightfield.mid.size);
+  car.model.setPaint((PAINTS.find((p) => p.id === settings.truck) ?? PAINTS[0]).hex);
+  engine.scene.add(car.object);
 
   const shadow = new ShadowMap();
   trees.addShadowCasters(shadow);
   props.addShadowCasters(shadow);
   wildlife.addShadowCasters(shadow);
   player.shadowCaster = shadow.addCaster(player.model.geometry, createBirdShadowMaterial(), player.object);
+  const carCasters = car.model.addShadows((g, m, f) => shadow.addCaster(g, m, f));
 
   const cam = engine.camera;
   const controls = new Controls();
   controls.invertPitch = settings.invertPitch;
   const chase = new ChaseCamera(cam, heightfield, canvas);
+  const drive = new DriveControls(controls, canvas);
+  const driveCam = new DriveCamera(cam, heightfield);
   const places = new Places(world.osm);
   const hud = new Hud(places);
   hud.units = settings.units;
@@ -134,7 +146,8 @@ async function boot() {
   const inspect = params.has('inspect');
   let inspectAngle = Number(params.get('inspect') || 0.8);
   let inspectHeight = 0.35;
-  let mode: 'menu' | 'fly' = params.has('fly') ? 'fly' : 'menu';
+  let mode: 'menu' | 'fly' = params.has('fly') || params.has('drive') ? 'fly' : 'menu';
+  let driving = false;
   const previewAngle = 0.95;
   let previewT = 0;
 
@@ -169,6 +182,9 @@ async function boot() {
       case 'units':
         hud.units = s.units;
         break;
+      case 'truck':
+        car.model.setPaint((PAINTS.find((p) => p.id === s.truck) ?? PAINTS[0]).hex);
+        break;
     }
     saveSettings(s);
   };
@@ -178,12 +194,39 @@ async function boot() {
     mode = m;
     menu.show(m === 'menu');
     hud.show(m === 'fly');
+    drive.enabled = m === 'fly' && driving;
+    player.object.visible = !driving;
     if (m === 'fly') {
-      chase.snapFrom(cam, player.object.position);
+      if (driving) driveCam.reset();
+      else chase.snapFrom(cam, player.object.position);
       canvas.focus();
     } else {
+      drive.release();
       hud.toggleHelp(false);
     }
+  };
+  /** Swaps between the bird and the pickup at the current spot. */
+  const setDriving = (d: boolean) => {
+    driving = d;
+    hud.setDriving(d);
+    drive.enabled = d && mode === 'fly';
+    if (d) {
+      const f = player.flight;
+      car.spawn(f.pos.x, f.pos.z, f.psi);
+      driveCam.reset();
+    } else {
+      drive.release();
+      const p = car.physics;
+      const fw = p.forward;
+      player.flight.spawn(p.pos.x + fw.x * 2, p.pos.y + 4, p.pos.z + fw.z * 2, p.psi);
+      chase.snapFrom(cam, player.object.position);
+    }
+    player.object.visible = !d;
+    if (player.shadowCaster) player.shadowCaster.visible = !d;
+  };
+  for (const c of carCasters) c.visible = false;
+  const syncCarCasters = () => {
+    for (const c of carCasters) c.visible = car.object.visible;
   };
   const sound = new SoundScape();
   sound.muted = localStorage.getItem('sb-muted') === '1';
@@ -212,8 +255,15 @@ async function boot() {
   addEventListener('keydown', wake);
   menu.onFly = () => {
     sound.start();
+    if (driving) setDriving(false);
     setMode('fly');
   };
+  menu.onDrive = () => {
+    sound.start();
+    if (!driving) setDriving(true);
+    setMode('fly');
+  };
+  if (params.has('drive')) setDriving(true);
   setMode(mode);
 
   addEventListener('keydown', (e) => {
@@ -221,25 +271,29 @@ async function boot() {
     if (mode !== 'fly') return;
     if (e.code === 'KeyH') hud.toggleHelp();
     if (e.code === 'KeyT') hud.toggleHidden();
-    if (e.code === 'KeyV') sound.call(player.species.id);
+    if (e.code === 'KeyV' && !driving) sound.call(player.species.id);
     if (e.code === 'KeyM') setMuted(!sound.muted);
+    if (e.code === 'KeyG' && !e.repeat) setDriving(!driving);
+    if (e.code === 'KeyL' && driving) car.headlights = !car.headlightsWanted(G.uNight.value, G.uFogDensity.value);
   });
 
   // Habitat sampled in a ring under the bird drives the ambient soundscape.
   const aud: AudioState = {
     speed: 0, agl: 100, flapPhase: 0, flapAmount: 0, perched: false, night: 0, month: 6, hour: 12,
     wet: 0, grass: 0, geese: Infinity, cattle: Infinity, car: Infinity, carSpeed: 0, active: false,
+    drive: 0, rpm: 0, throttle: 0, tyre: 0, slip: 0, horn: false,
   };
   let habitatT = 0;
   const updateSound = (dt: number) => {
     const f = player.flight;
-    const p = player.object.position;
+    const p = driving ? car.object.position : player.object.position;
+    const agl = driving ? 1.5 : f.agl;
     habitatT -= dt;
     if (habitatT <= 0) {
       habitatT = 0.5;
       let wet = 0;
       let grass = 0;
-      const R = 60 + Math.min(f.agl, 400) * 0.5;
+      const R = 60 + Math.min(agl, 400) * 0.5;
       for (let i = 0; i < 12; i++) {
         const a = (i / 12) * Math.PI * 2;
         const r = i % 2 ? R : R * 0.4;
@@ -255,11 +309,18 @@ async function boot() {
       aud.car = c.d;
       aud.carSpeed = c.v;
     }
-    aud.speed = f.speed;
-    aud.agl = f.agl;
+    const cp = car.physics;
+    aud.speed = driving ? Math.abs(cp.speed) : f.speed;
+    aud.agl = agl;
     aud.flapPhase = f.flapPhase;
-    aud.flapAmount = f.flapAmount;
-    aud.perched = f.state === 'perched';
+    aud.flapAmount = driving ? 0 : f.flapAmount;
+    aud.perched = !driving && f.state === 'perched';
+    aud.drive = driving ? 1 : 0;
+    aud.rpm = cp.rpm;
+    aud.throttle = drive.input.throttle;
+    aud.tyre = cp.surface.rough;
+    aud.slip = cp.slip;
+    aud.horn = driving && mode === 'fly' && controls.keys.has('KeyV');
     aud.night = G.uNight.value;
     aud.month = env.month;
     aud.hour = env.hours;
@@ -325,10 +386,34 @@ async function boot() {
     const gh = heightfield.height(cam.position.x, cam.position.z);
     cam.position.y = Math.max(cam.position.y, gh + 1.5);
     cam.fov = 42;
+    cam.near = 0.25;
     cam.updateProjectionMatrix();
     cam.up.set(0, 1, 0);
     cam.lookAt(b);
     // Shift the bird right of centre, clear of the menu panel.
+    if (innerWidth > 820) {
+      tmpRight.setFromMatrixColumn(cam.matrix, 0);
+      const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * r * cam.aspect;
+      cam.lookAt(b.clone().addScaledVector(tmpRight, -halfW * 0.38));
+    }
+    cam.updateMatrixWorld();
+  }
+
+  function previewCar(dt: number) {
+    // Menu backdrop while driving: a slow orbit around the parked truck.
+    previewT += dt;
+    car.sync(dt, G.uNight.value, car.headlightsWanted(G.uNight.value, G.uFogDensity.value));
+    const b = car.object.position.clone();
+    b.y += 1.1;
+    const a = car.physics.psi + 0.9 + previewT * 0.06;
+    const r = 8.5;
+    cam.position.set(b.x + Math.sin(a) * r, b.y + 1.4, b.z + Math.cos(a) * r);
+    cam.position.y = Math.max(cam.position.y, heightfield.height(cam.position.x, cam.position.z) + 1.2);
+    cam.fov = 42;
+    cam.near = 0.25;
+    cam.updateProjectionMatrix();
+    cam.up.set(0, 1, 0);
+    cam.lookAt(b);
     if (innerWidth > 820) {
       tmpRight.setFromMatrixColumn(cam.matrix, 0);
       const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * r * cam.aspect;
@@ -366,12 +451,21 @@ async function boot() {
       cam.updateMatrixWorld();
     } else if (mode === 'menu') {
       controls.update(dt);
-      previewCam(dt);
+      if (driving) previewCar(dt);
+      else previewCam(dt);
+    } else if (driving) {
+      const input = drive.update(dt);
+      if (controls.consume('KeyC')) driveCam.cycle();
+      car.step(dt, input);
+      car.sync(dt, G.uNight.value, car.headlightsWanted(G.uNight.value, G.uFogDensity.value));
+      driveCam.update(dt, car.physics, car.model, drive.consumeLook());
+      hud.updateCar(dt, car.physics);
     } else {
       const input = controls.update(dt);
       if (controls.consume('KeyC')) chase.cycle();
       player.step(dt, input);
       player.sync();
+      cam.near = 0.25;
       chase.update(dt, player.flight, player.object);
       hud.update(dt, player.flight, air);
     }
@@ -386,16 +480,19 @@ async function boot() {
     terrainShadow.update();
     terrain.update(cam);
     trees.update(cam);
+    grass.setCar(car.physics.pos.x, car.physics.pos.z, car.physics.psi, car.object.visible);
     grass.update(cam.position, seasonMonth());
     motes.update(cam, heightfield.height(cam.position.x, cam.position.z), window.innerHeight * engine.pixelRatio, 1 - G.uNight.value * 0.9);
     lights.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.lights.resize(cam, window.innerHeight * engine.pixelRatio);
     power.resize(cam, window.innerHeight * engine.pixelRatio);
     traffic.update(dt, cam.position, G.uNight.value);
-    wildlife.update(dt, cam.position, player.object.position);
+    const actor = driving ? car.object.position : player.object.position;
+    wildlife.update(dt, cam.position, actor);
     flocks.setMonth(env.month);
     flocks.update(dt, cam.position, { x: air.windX, z: air.windZ });
-    const focus = free ? cam.position : player.object.position;
+    syncCarCasters();
+    const focus = free ? cam.position : actor;
     props.update(cam.position, focus);
     shadow.update(engine.renderer, focus);
     G.uInvExposure.value = 1 / env.exposure;
@@ -409,7 +506,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
+    engine, env, terrain, heightfield, G, player, chase, air, car, driveCam, roadIndex, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     /** Renders a frame and returns it as a JPEG data URL (debug capture). */
     snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {
@@ -422,6 +519,7 @@ async function boot() {
       return o.toDataURL('image/jpeg', 0.88);
     },
     setMode,
+    setDriving,
   });
 }
 
