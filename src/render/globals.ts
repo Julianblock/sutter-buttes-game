@@ -40,6 +40,12 @@ export const G = {
   uRain: { value: 0 }, // current rainfall intensity 0..1
   uSnowFall: { value: 0 }, // current snowfall intensity 0..1
   uFlash: { value: 0 }, // lightning flash brightness (display units)
+  uWaterTex: { value: null as THREE.Texture | null }, // R water surface (m), G channel mask
+  uWaterSize: { value: 50000 },
+  uUnderwater: { value: 0 }, // 1 while the camera is below a water surface
+  uCamWaterY: { value: -1000 }, // that surface's height
+  uVision: { value: 0 }, // North Butte easter egg: the Buttes erupting, 0..1
+  uVolcano: { value: new THREE.Vector3() }, // volcanic core centre x, z and radius
 };
 
 export type GlobalUniforms = typeof G;

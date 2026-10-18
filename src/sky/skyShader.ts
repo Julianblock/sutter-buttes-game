@@ -138,6 +138,10 @@ vec4 cloudLayer(vec3 dir) {
 void main() {
   #include <logdepthbuf_fragment>
   vec3 dir = normalize(vDir);
+  if (uUnderwater > 0.5) {
+    outColor = vec4(waterScatter(uCamWaterY - uCamPos.y + max(-dir.y, 0.0) * 6.0), 1.0);
+    return;
+  }
   vec3 skyDir = vec3(dir.x, max(dir.y, -0.02), dir.z);
   vec3 col = skyRadianceDir(normalize(skyDir));
 

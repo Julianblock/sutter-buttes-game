@@ -16,6 +16,27 @@ float snowAmount(vec3 n, vec2 xz, float y) {
 }
 `;
 
+/** Rivers and ponds baked by Water: surface height and channel mask. */
+export const waterCommon = /* glsl */ `
+#ifndef WATER_COMMON
+#define WATER_COMMON
+uniform sampler2D uWaterTex;
+uniform float uWaterSize;
+uniform float uUnderwater;
+uniform float uCamWaterY;
+
+/** x: water surface height (m), y: channel mask (0 on dry land). */
+vec2 waterAt(vec2 xz) {
+  vec2 uv = xz / uWaterSize + 0.5;
+  if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return vec2(-1000.0, 0.0);
+  return textureLod(uWaterTex, uv, 0.0).rg;
+}
+
+/** Silty valley water: red light is gone within a few metres, green carries furthest. */
+const vec3 WATER_SIGMA = vec3(0.36, 0.15, 0.19);
+#endif
+`;
+
 /** Uniform declarations + lighting helpers shared by every lit material. */
 export const lightingCommon = /* glsl */ `
 ${atmosphereCommon}
@@ -53,6 +74,8 @@ uniform float uSnowCover;
 uniform float uRain;
 uniform float uSnowFall;
 uniform float uFlash;
+
+${waterCommon}
 
 const float CLOUD_BASE = 1800.0;
 const vec3 SNOW_ALB = vec3(0.86, 0.89, 0.93);
@@ -241,8 +264,28 @@ vec3 segmentTransmittance(vec3 wp) {
   return exp(-tau - fogDepth(uCamPos.y, wp.y, d) - precipDepth(d));
 }
 
+/** Daylight scattered back toward the eye by the water at a given depth. */
+vec3 waterScatter(float depth) {
+  vec3 E = sunRadiance(0.0) * max(uSunDir.y, 0.0) + moonRadiance(0.0) * max(uMoonDir.y, 0.0) + skyAmbient(vec3(0.0, 1.0, 0.0), 1.0);
+  return E * vec3(0.016, 0.036, 0.028) * exp(-WATER_SIGMA * max(depth, 0.0) * 0.7);
+}
+
+/** Murk between an underwater camera and a point (through the surface if above it). */
+vec3 underwaterFog(vec3 color, vec3 wp) {
+  vec3 v = wp - uCamPos;
+  float d = length(v);
+  float inWater = wp.y <= uCamWaterY ? d : d * clamp((uCamWaterY - uCamPos.y) / max(v.y, 1e-3), 0.0, 1.0);
+  vec3 T = exp(-WATER_SIGMA * inWater);
+  float depth = uCamWaterY - (uCamPos.y + min(wp.y, uCamWaterY)) * 0.5;
+  return color * T + waterScatter(depth) * (1.0 - T);
+}
+
 /** Aerial perspective: attenuates a lit surface and adds in-scattered sky light. */
 vec3 applyAtmosphere(vec3 color, vec3 wp) {
+  // Anything submerged only gets the light that made it down through the water.
+  vec2 wl = waterAt(wp.xz);
+  if (wl.y > 0.01 && wp.y < wl.x - 0.02) color *= exp(-WATER_SIGMA * (wl.x - wp.y) * 1.2);
+  if (uUnderwater > 0.5) return underwaterFog(color, wp);
   vec3 v = wp - uCamPos;
   float d = length(v);
   vec3 dir = v / max(d, 1e-3);
