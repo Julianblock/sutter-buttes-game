@@ -88,6 +88,8 @@ void main() {
   gl_PointSize = clamp(px * 2.0, 1.5, 9.0);
   // Sub-pixel motes fade instead of shrinking; far ones vanish.
   vAlpha = smoothstep(0.35, 1.6, px) * (1.0 - smoothstep(box * 0.3, box * 0.5, length(p - uCamPos))) * uAmount;
+  // Specks overhead against open sky read as daytime stars; keep the drift low.
+  vAlpha *= 1.0 - 0.9 * smoothstep(0.02, 0.3, normalize(p - uCamPos).y);
   #include <logdepthbuf_vertex>
 }
 `;
