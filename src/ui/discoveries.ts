@@ -72,7 +72,7 @@ export class Discoveries {
     const count = d.id && this.total ? `<div class="n">Discovery ${this.found.size} of ${this.total}</div>` : '';
     this.root.className = `discovery hide ${d.kind}`;
     this.root.innerHTML = `<div class="k">${d.kicker}</div><div class="t">${d.title}</div><div class="x">${d.text}</div>${count}`;
-    requestAnimationFrame(() => this.root.classList.remove('hide'));
+    setTimeout(() => this.root.classList.remove('hide'), 30);
     const hold = 6500 + d.text.length * 35;
     setTimeout(() => {
       this.root.classList.add('hide');
