@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { createGradePass } from './gradePass';
+import { lowPower } from '../ui/device';
 
 function supportsReversedDepth(): boolean {
   const c = document.createElement('canvas');
@@ -22,8 +23,8 @@ export class Engine {
   readonly exposurePass: ShaderPass;
   readonly grade: ShaderPass;
   /** Upper bound for adaptive resolution; the live ratio floats below it. */
-  maxPixelRatio = Math.min(window.devicePixelRatio, 1.5);
-  minPixelRatio = 0.75;
+  maxPixelRatio = Math.min(window.devicePixelRatio, lowPower ? 1.1 : 1.5);
+  minPixelRatio = lowPower ? 0.5 : 0.75;
   pixelRatio = this.maxPixelRatio;
   private frameMs = 16;
   private adaptCooldown = 2;
@@ -49,7 +50,7 @@ export class Engine {
     this.scene.add(this.camera);
 
     const size = new THREE.Vector2(window.innerWidth, window.innerHeight).multiplyScalar(this.pixelRatio);
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: lowPower ? 2 : 4 });
     this.composer = new EffectComposer(this.renderer, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     // Exposure is applied before bloom so the bloom threshold is in display units.

@@ -6,6 +6,7 @@ import type { RoadIndex } from '../world/roadIndex';
 import { LC } from '../world/meta';
 import { buildTree } from './treeGeometry';
 import { SPECIES_COUNT, treeFragment, treeVertex } from './treeShader';
+import { lowPower } from '../ui/device';
 
 export const TREE = { BLUE_OAK: 0, LIVE_OAK: 1, VALLEY_OAK: 2, COTTONWOOD: 3, SHRUB: 4, ALMOND: 5, WALNUT: 6, PRUNE: 7 } as const;
 
@@ -18,13 +19,13 @@ export interface PlantedTree {
 }
 
 const TILE = 250;
-const LOD0 = 170;
-const LOD1 = 1900;
-const LOD2 = 6500;
-const CAP = [14000, 70000, 90000];
+const LOD0 = lowPower ? 110 : 170;
+const LOD1 = lowPower ? 1100 : 1900;
+const LOD2 = lowPower ? 4000 : 6500;
+const CAP = lowPower ? [6000, 30000, 40000] : [14000, 70000, 90000];
 /** Beyond the imagery zone, tiles are grown procedurally within this range. */
-const OUTER_R = 2600;
-const OUTER_DROP = 3600;
+const OUTER_R = lowPower ? 1600 : 2600;
+const OUTER_DROP = lowPower ? 2400 : 3600;
 const LC_HALF = 25000;
 
 // Month keyframes (Jan..Dec) for leaf amount per species.
