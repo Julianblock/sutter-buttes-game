@@ -173,7 +173,7 @@ void main() {
   float hz = vnoise((q1 + vec2(0.0, 0.5)) / 3.7) + 0.5 * vnoise((q2 + vec2(0.0, 0.5)) / 1.4);
   n = normalize(n + vec3(h0 - hx, 0.0, h0 - hz) * (0.12 + rocky * 0.5) * nearFade);
 
-  float shadow = shadowAt(vWorld + n * 0.6, 0.0008);
+  float shadow = shadowAt(vWorld + n * 0.6, 0.00025);
   vec3 color = shadeSurface(alb, n, vWorld, ao, 0.92, shadow);
 
   if (waterFrac > 0.01) {

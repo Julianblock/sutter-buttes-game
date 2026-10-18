@@ -100,7 +100,7 @@ void main() {
   alb = mix(alb, mc, m);
 
   vec3 n = normalize(vNormal);
-  float shadow = shadowAt(vWorld + n * 0.4, 0.0008);
+  float shadow = shadowAt(vWorld + n * 0.4, 0.00025);
   float rough = mix(0.85, 0.55, m);
   vec3 col = shadeSurface(alb, n, vWorld, 1.0, rough, shadow);
   col = applyAtmosphere(col, vWorld);
