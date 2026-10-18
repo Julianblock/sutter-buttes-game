@@ -1,4 +1,4 @@
-import { lightingCommon, snowCommon } from './lighting';
+import { lightingCommon, snowCommon, waterCommon } from './lighting';
 import { noiseCommon } from './noise';
 import { terrainCommon } from './terrainCommon';
 import { windCommon } from './wind';
@@ -6,6 +6,7 @@ import { windCommon } from './wind';
 export const grassVertex = /* glsl */ `
 ${terrainCommon}
 ${noiseCommon}
+${waterCommon}
 #include <common>
 #include <logdepthbuf_pars_vertex>
 uniform vec3 uCamPos;
@@ -76,6 +77,8 @@ void main() {
   float canopy = smoothstep(0.07, 0.04, l);
   vec3 nrm = normalize(vec3(hC - terrainHeight(centre + vec2(4.0, 0.0)), 4.0, hC - terrainHeight(centre + vec2(0.0, 4.0))));
   float rocky = smoothstep(0.35, 0.55, 1.0 - nrm.y);
+  vec2 wl = waterAt(centre);
+  if (wl.y > 0.01 && wl.x > hC - 0.1) { collapse(); return; }
   float density = natural * (1.0 - canopy) * (1.0 - rocky) * (1.0 - mA.r) * (1.0 - mA.a) * (1.0 - mA.g);
   float patchy = vnoise(centre / 7.0) * 0.6 + vnoise(centre / 1.9) * 0.4;
   if (density < 0.3 + 0.4 * patchy * (1.0 - density)) { collapse(); return; }

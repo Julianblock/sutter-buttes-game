@@ -101,7 +101,14 @@ export class Trees {
   private zone = 0;
 
   /** Hand-placed trees on top of those detected in the imagery (cemetery oaks). */
-  constructor(buf: ArrayBuffer, zone: number, hf: Heightfield, private roads?: RoadIndex, private planted: PlantedTree[] = []) {
+  constructor(
+    buf: ArrayBuffer,
+    zone: number,
+    hf: Heightfield,
+    private roads?: RoadIndex,
+    private planted: PlantedTree[] = [],
+    private water?: { depthAt(x: number, z: number): number },
+  ) {
     const leafCol = Array.from({ length: SPECIES_COUNT }, () => new THREE.Color());
     const bark = BARK.map((h) => new THREE.Color(h));
     this.material = new THREE.ShaderMaterial({
@@ -212,6 +219,7 @@ export class Trees {
       let h: number;
       const lc = hf.landcover(x, z);
       if (ORCHARD[lc]) continue;
+      if (this.water && this.water.depthAt(x, z) > 0.15) continue;
       if (rImg < 2.7) {
         sp = TREE.SHRUB;
         r = 1.0 + rImg * 0.35 + seed * 0.4;
@@ -259,6 +267,7 @@ export class Trees {
       if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) return;
       const road = this.roads?.nearest(vals[0], vals[2], 12);
       if (road && road.dist < road.halfWidth + 1.8) return;
+      if (this.water && this.water.depthAt(vals[0], vals[2]) > 0.05) return;
       lists[tj * tilesN + ti].push(...vals);
     });
     for (let tj = 0; tj < tilesN; tj++) {
