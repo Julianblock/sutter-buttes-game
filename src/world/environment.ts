@@ -22,7 +22,7 @@ export type TimePreset =
   | 'golden'
   | 'sunset'
   | 'dusk';
-export type Weather = 'crisp' | 'clear' | 'hazy' | 'partly' | 'overcast' | 'tulefog';
+export type Weather = 'crisp' | 'clear' | 'hazy' | 'partly' | 'overcast' | 'tulefog' | 'rain' | 'storm' | 'snow';
 export type MoonPref = 'full' | 'quarter' | 'new' | 'actual';
 
 export const MOONS: Record<MoonPref, { label: string }> = {
@@ -52,15 +52,41 @@ export const TIMES: Record<TimePreset, { label: string }> = {
   dusk: { label: 'Dusk' },
 };
 
-/** `wind` is mean surface wind speed (m/s). */
-export const WEATHERS: Record<Weather, { label: string; mie: number; cloud: number; fog: number; fogTop: number; wind: number }> = {
-  crisp: { label: 'Crystal Clear (after rain)', mie: 0.45, cloud: 0.12, fog: 0, fogTop: -1000, wind: 6.5 },
-  clear: { label: 'Clear', mie: 1.5, cloud: 0.04, fog: 0, fogTop: -1000, wind: 3.5 },
-  hazy: { label: 'Valley Haze', mie: 4.0, cloud: 0.0, fog: 0, fogTop: -1000, wind: 1.3 },
-  partly: { label: 'Scattered Clouds', mie: 1.3, cloud: 0.5, fog: 0, fogTop: -1000, wind: 4.5 },
-  overcast: { label: 'Overcast', mie: 2.2, cloud: 0.97, fog: 0, fogTop: -1000, wind: 5.0 },
-  tulefog: { label: 'Tule Fog', mie: 1.8, cloud: 0.0, fog: 0.011, fogTop: 135, wind: 0.4 },
+interface WeatherSpec {
+  label: string;
+  mie: number;
+  cloud: number;
+  fog: number;
+  fogTop: number;
+  /** Mean surface wind speed (m/s). */
+  wind: number;
+  /** Rainfall and snowfall intensity 0..1. */
+  rain: number;
+  snow: number;
+  lightning?: boolean;
+  /** Ground state when the weather is picked: wetness, snow cover. */
+  wet: number;
+  cover: number;
+}
+
+export const WEATHERS: Record<Weather, WeatherSpec> = {
+  crisp: { label: 'Crystal Clear (after rain)', mie: 0.45, cloud: 0.12, fog: 0, fogTop: -1000, wind: 6.5, rain: 0, snow: 0, wet: 0.45, cover: 0 },
+  clear: { label: 'Clear', mie: 1.5, cloud: 0.04, fog: 0, fogTop: -1000, wind: 3.5, rain: 0, snow: 0, wet: 0, cover: 0 },
+  hazy: { label: 'Valley Haze', mie: 4.0, cloud: 0.0, fog: 0, fogTop: -1000, wind: 1.3, rain: 0, snow: 0, wet: 0, cover: 0 },
+  partly: { label: 'Scattered Clouds', mie: 1.3, cloud: 0.5, fog: 0, fogTop: -1000, wind: 4.5, rain: 0, snow: 0, wet: 0, cover: 0 },
+  overcast: { label: 'Overcast', mie: 2.2, cloud: 0.97, fog: 0, fogTop: -1000, wind: 5.0, rain: 0, snow: 0, wet: 0.1, cover: 0 },
+  tulefog: { label: 'Tule Fog', mie: 1.8, cloud: 0.0, fog: 0.011, fogTop: 135, wind: 0.4, rain: 0, snow: 0, wet: 0.3, cover: 0 },
+  rain: { label: 'Rain', mie: 5.5, cloud: 1, fog: 0, fogTop: -1000, wind: 5.5, rain: 0.65, snow: 0, wet: 0.85, cover: 0 },
+  storm: { label: 'Thunderstorm', mie: 7.5, cloud: 1, fog: 0, fogTop: -1000, wind: 9.5, rain: 1, snow: 0, lightning: true, wet: 1, cover: 0 },
+  snow: { label: 'Snow', mie: 7.0, cloud: 1, fog: 0, fogTop: -1000, wind: 2.5, rain: 0, snow: 0.8, wet: 0.35, cover: 0.8 },
 };
+
+/** A lightning strike: where it hit and how far from the listener. */
+export interface Strike {
+  x: number;
+  z: number;
+  dist: number;
+}
 
 // Month keyframes (Jan..Dec) for vegetation state in the Sacramento Valley.
 const K = {
@@ -78,6 +104,8 @@ const K = {
   autumn: [0, 0, 0, 0, 0, 0, 0, 0.1, 0.3, 0.8, 0.7, 0.1],
   snowLine: [1300, 1300, 1600, 2000, 2500, 3000, 3300, 3400, 3300, 2700, 1900, 1400],
   geese: [1, 0.9, 0.4, 0, 0, 0, 0, 0, 0, 0.5, 0.95, 1],
+  // Mean afternoon air temperature (°C) on the valley floor.
+  tempC: [12, 15, 18, 22, 27, 32, 35, 34, 31, 25, 17, 12],
 };
 
 function monthly(keys: number[], monthF: number): number {
@@ -103,6 +131,19 @@ export class Environment {
   sunAltitude = 0;
   exposure = 0.3;
   geese = 0;
+  /** Smoothed rainfall / snowfall intensity 0..1. */
+  rain = 0;
+  snowFall = 0;
+  /** Ground wetness and snow cover, 0..1; they evolve with the weather. */
+  wet = 0;
+  snowCover = 0;
+  /** Where lightning strikes are measured from (the camera). */
+  listener = new THREE.Vector3();
+  /** Strikes since the last call to takeStrikes(). */
+  private strikes: Strike[] = [];
+  private strikeT = 4;
+  private pulses: { t: number; k: number }[] = [];
+  private flashT = 0;
   private windT = 0;
   private sunVec = new THREE.Vector3();
   private moonVec = new THREE.Vector3();
@@ -182,6 +223,76 @@ export class Environment {
     }
   }
 
+  /** Switches weather and jumps the ground to a plausible state for it. */
+  setWeather(w: Weather) {
+    this.weather = w;
+    const s = WEATHERS[w];
+    this.rain = s.rain;
+    this.snowFall = s.snow;
+    if (s.rain || s.snow || s.wet > this.wet) this.wet = s.wet;
+    if (s.cover > this.snowCover || s.rain) this.snowCover = s.cover;
+  }
+
+  takeStrikes(): Strike[] {
+    const s = this.strikes;
+    this.strikes = [];
+    return s;
+  }
+
+  private updateWeather(dt: number, w: WeatherSpec, mf: number) {
+    const t = this.windT;
+    // Showers come in waves rather than at a constant rate.
+    const wave = 0.75 + 0.18 * Math.sin(t * 0.05) + 0.07 * Math.sin(t * 0.23 + 2);
+    const k = Math.min(1, dt * 0.5);
+    this.rain += (w.rain * wave - this.rain) * k;
+    this.snowFall += (w.snow * wave - this.snowFall) * k;
+
+    const sunUp = Math.max(0, this.sunVec.y);
+    // Snow means the air is near freezing; otherwise use the seasonal mean,
+    // colder at night.
+    const temp = this.snowFall > 0.02 ? 0 : monthly(K.tempC, mf) - 9 * (1 - Math.min(1, sunUp * 3));
+    const melt = Math.max(0, temp) * 0.0004 * (1 + sunUp * (1 - w.cloud)) + this.rain * 0.008;
+    const prevCover = this.snowCover;
+    this.snowCover = THREE.MathUtils.clamp(this.snowCover + (this.snowFall * dt) / 240 - melt * dt, 0, 1);
+    const meltWater = Math.max(0, prevCover - this.snowCover) * 3;
+
+    const dry = (0.00025 + 0.0015 * sunUp * (1 - w.cloud)) * (1 + Math.hypot(G.uWind.value.x, G.uWind.value.y) * 0.08);
+    this.wet = THREE.MathUtils.clamp(this.wet + (this.rain * dt) / 90 + meltWater - dry * dt * (1 - this.rain), 0, 1);
+
+    G.uRain.value = this.rain;
+    G.uSnowFall.value = this.snowFall;
+    G.uWet.value = this.wet;
+    G.uSnowCover.value = this.snowCover;
+
+    // Lightning: each strike is a few return strokes over half a second.
+    if (w.lightning) {
+      this.strikeT -= dt;
+      if (this.strikeT <= 0) {
+        this.strikeT = 3 + Math.random() * 11;
+        const a = Math.random() * Math.PI * 2;
+        const dist = 400 + Math.pow(Math.random(), 1.5) * 9000;
+        const x = this.listener.x + Math.sin(a) * dist;
+        const z = this.listener.z + Math.cos(a) * dist;
+        this.strikes.push({ x, z, dist });
+        const k0 = 1.6 / (1 + dist / 2500);
+        const n = 2 + Math.floor(Math.random() * 3);
+        let at = this.flashT;
+        for (let i = 0; i < n; i++) {
+          this.pulses.push({ t: at, k: k0 * (i === 0 ? 1 : 0.4 + Math.random() * 0.6) });
+          at += 0.05 + Math.random() * 0.12;
+        }
+      }
+    }
+    this.flashT += dt;
+    let flash = 0;
+    this.pulses = this.pulses.filter((p) => this.flashT - p.t < 1.5);
+    for (const p of this.pulses) {
+      const age = this.flashT - p.t;
+      if (age >= 0) flash += p.k * Math.exp(-age * 14);
+    }
+    G.uFlash.value = flash;
+  }
+
   setPreset(p: TimePreset) {
     this.chooseMoonDay();
     this.time = p;
@@ -233,6 +344,7 @@ export class Environment {
     seasonUniforms.uOrchard.value.set(monthly(K.bare, mf), monthly(K.almond, mf), monthly(K.fruit, mf), monthly(K.autumn, mf));
     seasonUniforms.uSnowLine.value = monthly(K.snowLine, mf);
     this.geese = monthly(K.geese, mf);
+    this.updateWeather(dt, w, mf);
 
     this.exposure = this.computeExposure(sunAlt, G.uMoonScale.value, w.cloud);
   }
@@ -261,7 +373,7 @@ export class Environment {
       }
     }
     if (sunAlt < -10) e *= THREE.MathUtils.lerp(1.6, 0.55, Math.min(1, moonScale / 9e-5));
-    if (sunAlt > 0) e *= 1 + cloud * 0.9;
+    if (sunAlt > 0) e *= (1 + cloud * 0.9) * (1 - 0.2 * this.rain);
     return e;
   }
 }
