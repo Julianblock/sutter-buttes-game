@@ -65,8 +65,11 @@ vec3 rippleNormal(vec2 xz, float dist) {
   float sw = vnoise(big) - vnoise(big + vec2(0.05, 0.0));
   float sz = vnoise(big) - vnoise(big + vec2(0.0, 0.05));
   vec3 nb = vec3(sw, 0.0, sz) * 0.5 * smoothstep(60.0, 5.0, footprint);
-  return normalize(vec3((a - b) * amp / e, 1.0, (a - c) * amp / e) + nb);
+  vec2 rip = rainRipples(xz) * smoothstep(0.2, 0.05, footprint);
+  return normalize(vec3((a - b) * amp / e + rip.x, 1.0, (a - c) * amp / e + rip.y) + nb);
 }
+
+const mat2 ROT_P = mat2(0.6, 0.8, -0.8, 0.6);
 
 void main() {
   #include <logdepthbuf_fragment>
@@ -151,9 +154,16 @@ void main() {
   alb = mix(alb, orch, orchard);
 
   // --- Wetlands & open water ------------------------------------------------------
-  waterFrac = max(waterFrac, mB.a * uVeg.w * smoothstep(0.3, 0.7, vnoise(xz / 30.0) + 0.3));
+  waterFrac = max(waterFrac, mB.a * max(uVeg.w, uWet * 0.8) * smoothstep(0.3, 0.7, vnoise(xz / 30.0) + 0.3));
   waterFrac = max(waterFrac, mA.a * smoothstep(0.12, 0.05, l + 0.02));
+  // Rain pools in flat hollows, wheel ruts and plough furrows.
+  float hollow = vnoise(ROT_P * xz / 7.0) * 0.6 + vnoise(xz / 1.9) * 0.4;
+  float puddle = smoothstep(0.78, 0.9, hollow + uWet * 0.22) * smoothstep(0.35, 0.8, uWet) * (1.0 - canopy) * (1.0 - natural * 0.8);
+  waterFrac = max(waterFrac, puddle * (0.6 + 0.4 * max(rice, orchard)));
   waterFrac *= smoothstep(0.30, 0.12, slope);
+
+  // Soaked soil and grass darken; rock less so.
+  alb = wetten(alb, 1.0 - rocky * 0.5);
 
   // Ground detail up close.
   // Rotated octaves so the value-noise lattice never lines up into dots.
@@ -173,8 +183,13 @@ void main() {
   float hz = vnoise((q1 + vec2(0.0, 0.5)) / 3.7) + 0.5 * vnoise((q2 + vec2(0.0, 0.5)) / 1.4);
   n = normalize(n + vec3(h0 - hx, 0.0, h0 - hz) * (0.12 + rocky * 0.5) * nearFade);
 
+  // Fresh snow buries everything but steep crags; open water stays dark slush.
+  float snowed = snowAmount(n, xz) * (1.0 - rocky * 0.6);
+  alb = mix(alb, SNOW_ALB * (0.94 + 0.06 * fine), snowed * (1.0 - waterFrac * 0.7));
+  waterFrac *= 1.0 - snowed * 0.85;
+
   float shadow = shadowAt(vWorld + n * 0.6, 0.00025);
-  vec3 color = shadeSurface(alb, n, vWorld, ao, 0.92, shadow);
+  vec3 color = shadeSurface(alb, n, vWorld, ao, mix(0.92, 0.62, uWet * (1.0 - snowed)), shadow);
 
   if (waterFrac > 0.01) {
     vec3 wn = rippleNormal(xz, dist);
