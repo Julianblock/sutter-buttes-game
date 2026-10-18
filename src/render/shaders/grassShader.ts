@@ -24,6 +24,8 @@ uniform vec2 uFadeOut;    // and back down between these
 uniform float uGrassH;    // seasonal sward height (m)
 uniform float uSeedHead;  // 0..1 share of grasses in seed (late spring - summer)
 uniform vec4 uCar;        // player truck: x, z, sin(heading), cos(heading); 0 heading vector = none
+uniform float uSnowCover;
+uniform float uRain;
 in float aBlade;          // blade index within the clump
 ${windCommon}
 out vec3 vWorld;
@@ -132,6 +134,11 @@ void main() {
   }
   width *= wMul;
 
+  // Snow buries short plants; taller ones poke through, bowed by its weight.
+  float snowDepth = uSnowCover * 0.22 * (0.6 + 0.8 * vnoise(root / 3.0));
+  if (height < snowDepth + 0.04) { collapse(); return; }
+  leanAmt += uSnowCover * 0.5 + uRain * 0.25;
+
   float face = rb2 * 6.2832;
   vec3 across = vec3(cos(face), 0.0, sin(face));
   vec3 bendDir = normalize(vec3(cos(ang + 0.6), 0.0, sin(ang + 0.6)));
@@ -178,6 +185,8 @@ void main() {
       vHead = 2.0;
     }
   }
+  // Snow caught on the upper blades.
+  col = mix(col, vec3(0.86, 0.89, 0.93), uSnowCover * smoothstep(0.3, 1.0, y) * (0.35 + 0.4 * rb1));
   vColor = col;
 
   vec2 dc = p.xz - uCamPos.xz;
@@ -212,7 +221,13 @@ void main() {
   n = normalize(n + vec3(0.0, 0.9, 0.0));
   float shadow = shadowAt(vWorld + vec3(0.0, 0.3, 0.0), 0.0004);
   float ao = mix(0.3, 1.0, vY);
-  vec3 col = shadeSurface(alb, n, vWorld, ao, mix(0.75, 0.5, vGust), shadow);
+  alb = wetten(alb, 0.7);
+  vec3 col = shadeSurface(alb, n, vWorld, ao, mix(mix(0.75, 0.5, vGust), 0.3, uWet), shadow);
+  // Beaded water on wet blades catches the sky.
+  if (uWet > 0.05) {
+    float F = 0.02 + 0.98 * pow(1.0 - max(dot(normalize(vNormal), V), 0.0), 5.0);
+    col += skyRadianceDir(reflect(-V, n)) * F * uWet * 0.35 * vY;
+  }
   // Light through thin blades when looking toward the sun.
   float back = pow(max(dot(-V, uSunDir), 0.0), 3.0);
   col += alb * sunRadiance(vWorld.y) * back * shadow * 0.3 * vY;
