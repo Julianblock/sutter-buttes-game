@@ -212,6 +212,15 @@ void main() {
     albedo = uBarkColor[vSpecies] * 0.55 * (0.75 + 0.5 * bn);
   }
 
+  // Rain darkens bark far more than waxy leaves.
+  albedo = wetten(albedo, vLeaf > 0.5 ? 0.35 : 1.0);
+  // Snow lodges on the tops of branches and leaf clumps.
+  vec3 gn = normalize(vNormal);
+  if (!gl_FrontFacing) gn = -gn;
+  float snowT = snowAmount(normalize(gn + n * 0.5), vWorld.xz * 2.0 + vWorld.y) * (vLeaf > 0.5 ? 0.9 : 0.75);
+  albedo = mix(albedo, SNOW_ALB, snowT);
+  thin *= 1.0 - snowT;
+
   float shadow = shadowAt(vWorld + n * 0.3, 0.002);
   vec3 sun = sunRadiance(vWorld.y);
   vec3 moon = moonRadiance(vWorld.y);
