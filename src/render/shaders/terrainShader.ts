@@ -153,8 +153,104 @@ void main() {
   orch = mix(orch, vec3(0.33, 0.27, 0.08), uOrchard.w * (1.0 - mB.r) * 0.6);
   alb = mix(alb, orch, orchard);
 
+  // --- Farmland patchwork -----------------------------------------------------------
+  // The valley is surveyed into square-mile sections split into fields of 10 to
+  // 160 acres. Coarse imagery smears them together, so lay parcels over it:
+  // each its own crop and tone, rows running one way, weedy ditches between.
+  float fp0 = length(fwidth(xz));
+  float levee = 0.0;
+  float rowsM = 0.0;
+  float farm = (1.0 - natural) * (1.0 - mB.b) * (1.0 - mA.a) * (1.0 - mB.a * 0.7)
+             * (1.0 - smoothstep(0.12, 0.3, slope)) * (1.0 - smoothstep(90.0, 250.0, vWorld.y));
+  farm *= 1.0 - w.x * 0.55;
+  if (farm > 0.01) {
+    const float SEC = 402.3;
+    vec2 cell = floor(xz / SEC);
+    vec2 f = fract(xz / SEC);
+    vec2 lo = vec2(0.0), hi = vec2(1.0);
+    vec2 pid = cell * 5.0;
+    float hs = hash12(cell + 0.37);
+    float sx = 0.25 + 0.5 * hash12(cell + 7.1);
+    float sz = 0.25 + 0.5 * hash12(cell + 3.7);
+    if (hs < 0.4) {
+      if (f.x < sx) { hi.x = sx; pid.x += 1.0; } else { lo.x = sx; pid.x += 2.0; }
+      if (hash12(pid + 1.3) < 0.4) { float m = mix(lo.y, hi.y, 0.5); if (f.y < m) { hi.y = m; pid.y += 1.0; } else { lo.y = m; pid.y += 2.0; } }
+    } else if (hs < 0.8) {
+      if (f.y < sz) { hi.y = sz; pid.y += 1.0; } else { lo.y = sz; pid.y += 2.0; }
+      if (hash12(pid + 2.9) < 0.4) { float m = mix(lo.x, hi.x, 0.5); if (f.x < m) { hi.x = m; pid.x += 3.0; } else { lo.x = m; pid.x += 4.0; } }
+    }
+    vec2 ed2 = min(f - lo, hi - f) * SEC;
+    float ed = min(ed2.x, ed2.y);
+    float tone = hash12(pid + 11.0);
+    float crop = hash12(pid + 23.0);
+    // Crop palette: green crop, golden stubble, ploughed earth, pale fallow.
+    vec3 cropCol = crop < 0.3 ? mix(vec3(0.07, 0.12, 0.035), vec3(0.11, 0.15, 0.05), tone)
+                 : crop < 0.55 ? vec3(0.27, 0.22, 0.11)
+                 : crop < 0.78 ? vec3(0.13, 0.10, 0.07)
+                 : vec3(0.22, 0.19, 0.14);
+    // In winter most fields are bare or sprouting; in spring and summer, green.
+    cropCol = mix(cropCol, mix(vec3(0.07, 0.12, 0.035), cropCol, 0.5), uVeg.x * step(0.55, crop) * 0.6);
+    vec3 parcel = mix(alb, cropCol * (0.85 + 0.3 * tone) * (luma(alb) / 0.12 * 0.4 + 0.6), 0.3);
+    parcel *= 0.86 + 0.28 * tone;
+    // Rows and tractor passes, faded before they alias.
+    float along = hash12(pid + 5.0) < 0.5 ? xz.x : xz.y;
+    float spacing = 0.9 + 0.7 * hash12(pid + 9.0);
+    float rowFade = smoothstep(spacing * 0.9, spacing * 0.35, fp0);
+    rowsM = (0.5 + 0.5 * sin(along * 6.2832 / spacing)) * rowFade;
+    parcel *= 1.0 + 0.12 * sin(along * 6.2832 / spacing) * rowFade;
+    parcel *= 1.0 + 0.05 * (step(0.5, fract(along / 18.0)) - 0.5) * smoothstep(12.0, 4.0, fp0);
+    // Weedy ditch banks and farm tracks along the field edges.
+    float edgeW = 2.5 + 2.0 * hash12(pid + 13.0);
+    float em = (1.0 - smoothstep(edgeW, edgeW + fp0 * 1.5, ed)) * clamp(6.0 / (fp0 + 2.0), 0.0, 1.0);
+    vec3 weeds = mix(vec3(0.06, 0.08, 0.035), vec3(0.18, 0.15, 0.09), (1.0 - uVeg.x) * 0.7 + 0.15 * nB);
+    parcel = mix(parcel, weeds, em * 0.7);
+    levee = em * farm;
+    // Farmsteads: a ring of shade trees around the house in a field corner.
+    float outer = step(8000.0, max(abs(xz.x), abs(xz.y)));
+    float hf = hash12(cell + 41.0);
+    if (hf < 0.14 && outer > 0.5) {
+      vec2 c = vec2(hash12(cell + 43.0) < 0.5 ? 0.06 : 0.94, hash12(cell + 47.0) < 0.5 ? 0.06 : 0.94);
+      float d = length((f - c) * SEC) + (fbm(xz / 14.0, 3) - 0.5) * 22.0;
+      float grove = smoothstep(48.0, 36.0, d);
+      parcel = mix(parcel, mix(vec3(0.025, 0.045, 0.018), vec3(0.06, 0.055, 0.04), (1.0 - uVeg.y) * 0.6) * (0.7 + 0.6 * vnoise(xz / 5.0)), grove * 0.85);
+      float house = smoothstep(9.0, 7.0, length((f - c) * SEC - vec2(4.0, -3.0)));
+      parcel = mix(parcel, vec3(0.33, 0.31, 0.28), house);
+      canopy = max(canopy, grove * 0.8);
+    }
+    // Orchards past the range of grown 3D trees: dark crowns in a regular grid.
+    outer *= smoothstep(2300.0, 2700.0, length(xz - uCamPos.xz));
+    if (orchard * outer > 0.01) {
+      vec2 g = xz / vec2(6.7, 5.8);
+      vec2 cc = (fract(g) - 0.5) * vec2(6.7, 5.8);
+      float crown = smoothstep(2.6, 2.0, length(cc));
+      crown = mix(crown, 0.42, smoothstep(0.8, 3.0, fp0));
+      vec3 crownCol = mix(vec3(0.09, 0.08, 0.06), vec3(0.035, 0.065, 0.025), uVeg.y);
+      parcel = mix(parcel, crownCol, crown * orchard * 0.9);
+    }
+    alb = mix(alb, parcel, farm);
+  }
+
+  // Flooded rice: levees along the field edges and wandering contour checks
+  // stand out of the water, and straw stubble pokes through up close.
+  if (rice > 0.01 && waterFrac > 0.01) {
+    float cv = fbm(xz / 230.0 + 17.0, 3) * 7.0;
+    float cw = fwidth(cv);
+    float cd = abs(fract(cv) - 0.5);
+    float wv = cw / max(fp0, 1e-3) * 1.6;
+    float check = (1.0 - smoothstep(wv, wv + cw, cd)) * smoothstep(0.45, 0.15, cw);
+    float dry = max(levee, check * rice);
+    alb = mix(alb, mix(vec3(0.07, 0.09, 0.04), vec3(0.17, 0.14, 0.09), 1.0 - uVeg.x * 0.6), check * rice * 0.7);
+    waterFrac *= (1.0 - dry) * (1.0 - rowsM * 0.45 * uRice.x);
+  }
+
   // --- Wetlands & open water ------------------------------------------------------
-  waterFrac = max(waterFrac, mB.a * max(uVeg.w, uWet * 0.8) * smoothstep(0.3, 0.7, vnoise(xz / 30.0) + 0.3));
+  // Managed marsh: open water between stands of tule and cattail, which go
+  // from green in summer to tan and rust after the autumn flooding.
+  float flood = max(uVeg.w, uWet * 0.8);
+  float stands = fbm(xz / 70.0, 4) + 0.35 * vnoise(xz / 9.0);
+  vec3 tule = mix(vec3(0.21, 0.17, 0.10), vec3(0.06, 0.10, 0.04), uVeg.x * 0.8) * (0.75 + 0.5 * vnoise(xz / 4.0));
+  alb = mix(alb, tule, mB.a * smoothstep(0.5, 0.62, stands) * 0.75);
+  waterFrac = max(waterFrac, mB.a * flood * smoothstep(0.58, 0.48, stands - flood * 0.12));
   waterFrac = max(waterFrac, mA.a * smoothstep(0.12, 0.05, l + 0.02));
   // Rain pools in flat hollows, wheel ruts and plough furrows.
   float hollow = vnoise(ROT_P * xz / 7.0) * 0.6 + vnoise(xz / 1.9) * 0.4;
