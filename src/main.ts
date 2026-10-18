@@ -42,6 +42,7 @@ import { PAINTS } from './vehicle/carModel';
 import { DriveControls } from './vehicle/driveControls';
 import { DriveCamera } from './vehicle/driveCamera';
 import { DustTrail } from './vehicle/dust';
+import { Precipitation } from './weather/precip';
 
 function paletteFor(s: GameSettings): Palette {
   const sp = speciesById(s.bird) ?? SPECIES[0];
@@ -129,6 +130,8 @@ async function boot() {
   engine.scene.add(car.object);
   const dust = new DustTrail();
   engine.scene.add(dust.points);
+  const precip = new Precipitation();
+  engine.scene.add(precip.mesh);
 
   const shadow = new ShadowMap();
   trees.addShadowCasters(shadow);
@@ -503,6 +506,7 @@ async function boot() {
     traffic.update(dt, cam.position, G.uNight.value);
     const sw = G.uSeason.value;
     dust.update(dt, car.physics, driving && mode === 'fly', Math.min(1, sw.z + sw.w * 0.8 + sw.y * 0.2), cam, window.innerHeight * engine.pixelRatio);
+    precip.update(dt, cam, window.innerHeight * engine.pixelRatio, car.object.visible ? car.object.matrixWorld : null);
     const actor = driving ? car.object.position : player.object.position;
     wildlife.update(dt, cam.position, actor);
     flocks.setMonth(env.month);
@@ -528,7 +532,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    engine, env, terrain, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
+    engine, env, terrain, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     /** Renders a frame and returns it as a JPEG data URL (debug capture). */
     snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {
