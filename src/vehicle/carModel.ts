@@ -235,6 +235,11 @@ export class CarModel {
       uBrake: { value: 0 },
       uSpeedFrac: { value: 0 },
       uRpmFrac: { value: 0 },
+      uCarSnow: { value: 0 },
+      uWiperPhase: { value: 0 },
+      uWiperT: { value: 1.4 },
+      uWiperOn: { value: 0 },
+      uWiperAngle: { value: 0 },
     };
     this.material = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -291,6 +296,38 @@ export class CarModel {
     this.steering.add(wheel);
     mount.add(this.steering);
     this.body.add(mount);
+  }
+
+  /** Snow lying on the truck, 0..1; negative until first settled. */
+  private snow = -1;
+
+  /**
+   * Weather on the truck: wipers run whenever it's raining or snowing, and snow
+   * piles up when parked, blows off at speed, and melts in rain or sun.
+   */
+  weather(dt: number, speed: number) {
+    const u = this.material.uniforms;
+    const rain = G.uRain.value;
+    const fall = G.uSnowFall.value;
+    if (this.snow < 0) this.snow = G.uSnowCover.value * 0.8;
+    const blow = Math.max(0, Math.abs(speed) - 8) * 0.02;
+    const melt = rain * 0.05 + (fall > 0.02 ? 0 : 0.004);
+    this.snow = THREE.MathUtils.clamp(this.snow + (fall / 50 - blow - melt) * dt, 0, 1);
+    u.uCarSnow.value = this.snow;
+
+    const precip = rain + fall * 0.6;
+    const on = precip > 0.04;
+    const parked = u.uWiperAngle.value < 0.02;
+    if (on || !parked) {
+      // Faster sweeps in heavier rain; finish the stroke before parking.
+      u.uWiperT.value = THREE.MathUtils.lerp(2.4, 1.05, Math.min(1, precip));
+      const before = u.uWiperPhase.value;
+      let ph = before + dt / u.uWiperT.value;
+      if (!on && Math.floor(ph) > Math.floor(before)) ph = Math.floor(ph);
+      u.uWiperPhase.value = ph;
+    }
+    u.uWiperOn.value = on ? 1 : 0;
+    u.uWiperAngle.value = 1.75 * (0.5 - 0.5 * Math.cos(u.uWiperPhase.value * Math.PI * 2));
   }
 
   setPaint(hex: number) {
