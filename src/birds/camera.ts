@@ -28,14 +28,38 @@ export class ChaseCamera {
   shake = 0;
 
   constructor(private cam: THREE.PerspectiveCamera, private hf: Heightfield, el: HTMLElement) {
+    // Drag (mouse or finger) to orbit; pinch with two fingers to zoom.
+    const pts = new Map<number, { x: number; y: number }>();
+    let pinch = 0;
     el.addEventListener('pointerdown', (e) => {
-      if (e.button === 0 || e.button === 2) this.dragging = true;
+      if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.dragging = true;
+      pinch = 0;
     });
-    addEventListener('pointerup', () => (this.dragging = false));
+    const lift = (e: PointerEvent) => {
+      pts.delete(e.pointerId);
+      this.dragging = pts.size > 0;
+      pinch = 0;
+    };
+    addEventListener('pointerup', lift);
+    addEventListener('pointercancel', lift);
     el.addEventListener('pointermove', (e) => {
-      if (!this.dragging) return;
-      this.orbitYaw -= e.movementX * 0.005;
-      this.orbitPitch = THREE.MathUtils.clamp(this.orbitPitch + e.movementY * 0.004, -1.2, 1.3);
+      const p = pts.get(e.pointerId);
+      if (!p) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      if (pts.size >= 2) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch > 0) this.zoom = THREE.MathUtils.clamp(this.zoom * (pinch / d), 0.35, 6);
+        pinch = d;
+        return;
+      }
+      const k = e.pointerType === 'touch' ? 1.4 : 1;
+      this.orbitYaw -= dx * 0.005 * k;
+      this.orbitPitch = THREE.MathUtils.clamp(this.orbitPitch + dy * 0.004 * k, -1.2, 1.3);
       this.idle = 0;
     });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
