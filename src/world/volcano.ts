@@ -34,14 +34,14 @@ void main() {
     float born = aSeed.w * ${PERIOD.toFixed(1)};
     float age = mod(uVisionT - born, ${PERIOD.toFixed(1)});
     float s = age / ${PERIOD.toFixed(1)};
-    float h = 4200.0 * (1.0 - pow(1.0 - s, 1.7));
-    float r = (40.0 + 700.0 * pow(s, 0.8) * (0.35 + 0.65 * aSeed.y)) + smoothstep(0.55, 1.0, s) * 2600.0 * aSeed.z;
+    float h = 5200.0 * (1.0 - pow(1.0 - s, 1.8));
+    float r = (90.0 + 1000.0 * pow(s, 0.7) * (0.3 + 0.7 * aSeed.y)) + smoothstep(0.5, 1.0, s) * 4500.0 * aSeed.z;
     float a = aSeed.x * 6.2832 + s * 2.0;
     p = uVent + vec3(cos(a) * r, h, sin(a) * r);
     p.xz += uWind * age * 22.0 * smoothstep(0.1, 0.8, s);
-    size = 90.0 + 800.0 * s;
-    alpha = smoothstep(0.0, 0.03, s) * pow(1.0 - s, 0.6) * 0.5 * step(born, uVisionT);
-    glow = exp(-h / 500.0);
+    size = 260.0 + 1500.0 * s;
+    alpha = smoothstep(0.0, 0.03, s) * pow(1.0 - s, 0.5) * 0.7 * step(born, uVisionT);
+    glow = exp(-h / 220.0);
   } else {
     // Lava fountain: incandescent bombs on ballistic arcs over the vent.
     float period = 3.0 + aSeed.w * 3.0;
@@ -85,11 +85,11 @@ void main() {
   vec3 col;
   float a;
   if (vKind < 0.5) {
-    float puff = exp(-r2 * 2.0) * (0.6 + 0.8 * vnoise(q * 2.5 + vSeed * 50.0));
-    vec3 ash = vec3(0.16, 0.15, 0.14);
+    float puff = exp(-r2 * 1.6) * (0.35 + 1.3 * vnoise(q * 2.2 + vSeed * 50.0));
+    vec3 ash = vec3(0.13, 0.122, 0.115);
     // Lit from above by the sun and from below by the glowing vent.
     float top = 0.5 + 0.5 * -q.y;
-    col = ash / PI * (sunRadiance(vWorld.y) * (0.25 + 0.6 * top) + skyAmbient(vec3(0.0, 1.0, 0.0), 1.0))
+    col = ash / PI * (sunRadiance(vWorld.y) * (0.15 + 0.7 * top * top) + skyAmbient(vec3(0.0, 1.0, 0.0), 1.0))
         + vec3(1.0, 0.32, 0.07) * vGlow * (0.5 + 0.5 * q.y) * 3.0 * uInvExposure;
     a = vAlpha * puff;
   } else {
