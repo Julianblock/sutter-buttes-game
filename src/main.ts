@@ -285,7 +285,7 @@ async function boot() {
     if (e.code === 'KeyV' && !driving) sound.call(player.species.id);
     if (e.code === 'KeyM') setMuted(!sound.muted);
     if (e.code === 'KeyG' && !e.repeat) setDriving(!driving);
-    if (e.code === 'KeyL' && driving) car.headlights = !car.headlightsWanted(G.uNight.value, G.uFogDensity.value);
+    if (e.code === 'KeyL' && driving) car.headlights = !car.headlightsWanted(G.uNight.value, murky());
   });
 
   // Habitat sampled in a ring under the bird drives the ambient soundscape.
@@ -413,7 +413,7 @@ async function boot() {
   function previewCar(dt: number) {
     // Menu backdrop while driving: a slow orbit around the parked truck.
     previewT += dt;
-    car.sync(dt, G.uNight.value, car.headlightsWanted(G.uNight.value, G.uFogDensity.value));
+    car.sync(dt, G.uNight.value, car.headlightsWanted(G.uNight.value, murky()));
     const b = car.object.position.clone();
     b.y += 1.1;
     const a = car.physics.psi + 0.9 + previewT * 0.06;
@@ -435,6 +435,8 @@ async function boot() {
 
   const clock = new THREE.Clock();
   let lastMie = -1;
+  const murky = () => G.uFogDensity.value > 0.003 || G.uRain.value + G.uSnowFall.value > 0.04;
+
   function frame() {
     const rawDt = clock.getDelta();
     const dt = Math.min(rawDt, 0.1);
@@ -473,7 +475,7 @@ async function boot() {
         driveCam.shake = Math.min(1.5, car.physics.crashed / 6);
         car.physics.crashed = 0;
       }
-      car.sync(dt, G.uNight.value, car.headlightsWanted(G.uNight.value, G.uFogDensity.value));
+      car.sync(dt, G.uNight.value, car.headlightsWanted(G.uNight.value, murky()));
       driveCam.update(dt, car.physics, car.model, drive.consumeLook());
       hud.updateCar(dt, car.physics);
     } else {
@@ -507,6 +509,7 @@ async function boot() {
     const sw = G.uSeason.value;
     dust.update(dt, car.physics, driving && mode === 'fly', Math.min(1, sw.z + sw.w * 0.8 + sw.y * 0.2), cam, window.innerHeight * engine.pixelRatio);
     precip.update(dt, cam, window.innerHeight * engine.pixelRatio, car.object.visible ? car.object.matrixWorld : null);
+    car.model.weather(dt, car.physics.speed);
     const actor = driving ? car.object.position : player.object.position;
     wildlife.update(dt, cam.position, actor);
     flocks.setMonth(env.month);
