@@ -27,6 +27,10 @@ export interface AudioState {
   tyre: number; // surface roughness 0..1
   slip: number; // 0..1 lateral slide
   horn: boolean;
+  rain: number; // rainfall 0..1
+  snow: number; // snow cover 0..1 (hushes everything)
+  roadWet: number; // ground wetness 0..1 (tyre swish)
+  windSpeed: number; // surface wind (m/s)
 }
 
 type CallType = 'scream' | 'kak' | 'whistle' | 'honk' | 'bugle' | 'croak' | 'shriek' | 'chitter' | 'hiss';
@@ -69,6 +73,11 @@ export class SoundScape {
   private tyreFilter!: BiquadFilterNode;
   private squealGain!: GainNode;
   private hornGain!: GainNode;
+  private rainHiss!: GainNode;
+  private rainHissFilter!: BiquadFilterNode;
+  private rainPatter!: GainNode;
+  private roofDrum!: GainNode;
+  private dripT = 0;
   private lastSin = 0;
   private timers = { lark: 4, cricket: 0, frog: 0, honk: 0, moo: 8, coyote: 30, blackbird: 6 };
   private crickets: { rate: number; pan: number; next: number }[] = [];
@@ -179,7 +188,55 @@ export class SoundScape {
       o.start();
     }
 
+    // Rain: broadband hiss of drops on grass and leaves, a softer patter
+    // underneath, and a hollow drumming on the cab roof.
+    this.rainHissFilter = ctx.createBiquadFilter();
+    this.rainHissFilter.type = 'bandpass';
+    this.rainHissFilter.frequency.value = 4200;
+    this.rainHissFilter.Q.value = 0.45;
+    this.rainHiss = ctx.createGain();
+    this.rainHiss.gain.value = 0;
+    loop().connect(this.rainHissFilter).connect(this.rainHiss).connect(this.master);
+    const pf = ctx.createBiquadFilter();
+    pf.type = 'bandpass';
+    pf.frequency.value = 1100;
+    pf.Q.value = 0.8;
+    this.rainPatter = ctx.createGain();
+    this.rainPatter.gain.value = 0;
+    loop().connect(pf).connect(this.rainPatter).connect(this.master);
+    const rf = ctx.createBiquadFilter();
+    rf.type = 'lowpass';
+    rf.frequency.value = 420;
+    rf.Q.value = 1.4;
+    this.roofDrum = ctx.createGain();
+    this.roofDrum.gain.value = 0;
+    loop().connect(rf).connect(this.roofDrum).connect(this.master);
+
     for (let i = 0; i < 7; i++) this.crickets.push({ rate: rand(0.9, 1.1), pan: rand(-1, 1), next: rand(0, 1) });
+  }
+
+  /**
+   * Thunder from a strike `dist` metres away, arriving at the speed of sound:
+   * a ripping crack when close, a long low rumble rolling in from afar.
+   */
+  thunder(dist: number) {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running') return;
+    const t = ctx.currentTime + dist / 343;
+    const near = Math.max(0, 1 - dist / 2500);
+    const loud = Math.min(0.9, 900 / Math.max(dist, 300));
+    const pan = rand(-0.7, 0.7);
+    const out = this.panner(pan, this.master);
+    if (near > 0) {
+      this.noiseBurst(t, 0.25 + near * 0.3, 2500, 0.4, loud * near * 0.8, out, 'bandpass');
+      this.noiseBurst(t + 0.05, 0.6, 600, 0.5, loud * near * 0.6, out, 'bandpass');
+    }
+    const len = 2.5 + Math.min(5, dist / 1500);
+    const cutoff = 90 + 500 * near;
+    for (let i = 0; i < 5; i++) {
+      const ti = t + 0.1 + i * len * 0.17 + rand(0, 0.3);
+      this.noiseBurst(ti, len * rand(0.35, 0.6), cutoff * rand(0.7, 1.3), 0.7, loud * rand(0.35, 0.7), out, 'lowpass');
+    }
   }
 
   setMuted(m: boolean) {
@@ -441,14 +498,17 @@ export class SoundScape {
     this.engineFilter.frequency.setTargetAtTime(220 + s.rpm * 900 + s.throttle * 1100, t, 0.08);
     this.engineGain.gain.setTargetAtTime(drv * (0.05 + s.throttle * 0.07 + s.rpm * 0.05), t, 0.08);
     const sp = Math.abs(s.speed) * drv;
-    this.tyreGain.gain.setTargetAtTime(Math.min(0.3, sp * 0.006 * (1 + s.tyre * 2.5)), t, 0.15);
-    this.tyreFilter.frequency.setTargetAtTime(250 + sp * 18 + s.tyre * 500, t, 0.15);
+    // Wet tarmac: tyres hiss and swish through the film of water.
+    const swish = s.roadWet * (1 - s.tyre);
+    this.tyreGain.gain.setTargetAtTime(Math.min(0.35, sp * 0.006 * (1 + s.tyre * 2.5 + swish * 1.8)), t, 0.15);
+    this.tyreFilter.frequency.setTargetAtTime(250 + sp * 18 + s.tyre * 500 + swish * 2600, t, 0.15);
     this.squealGain.gain.setTargetAtTime(drv * Math.max(0, s.slip - 0.25) * (1 - s.tyre) * 0.5 * Math.min(1, sp / 6), t, 0.05);
     this.hornGain.gain.setTargetAtTime(s.horn && drv ? 0.07 : 0, t, 0.02);
 
     // Wind: louder and brighter with airspeed; quieter when perched or in the menu.
     const v = (s.active && !s.perched ? s.speed : 1.5) * (1 - drv * 0.55);
-    this.windGain.gain.setTargetAtTime(Math.min(0.9, 0.04 + Math.pow(v / 22, 2) * 0.5), t, k);
+    const gale = Math.pow(s.windSpeed / 12, 2) * 0.25 * (1 - drv * 0.6);
+    this.windGain.gain.setTargetAtTime(Math.min(0.9, 0.04 + Math.pow(v / 22, 2) * 0.5 + gale), t, k);
     this.windFilter.frequency.setTargetAtTime(180 + v * v * 3.2, t, k);
     const stoop = Math.max(0, (v - 28) / 30);
     this.whistleGain.gain.setTargetAtTime(stoop * 0.25, t, k);
@@ -461,9 +521,25 @@ export class SoundScape {
     }
     this.lastSin = sn;
 
-    // Ground ambience fades with height above ground.
+    // Rain: hiss and patter outside, a muffled drumming on the roof in the cab.
+    const r = s.active ? s.rain : s.rain * 0.4;
+    const ground = Math.max(0.35, Math.min(1, 1.2 - s.agl / 300));
+    this.rainHiss.gain.setTargetAtTime(r * 0.16 * ground * (1 - drv * 0.7), t, 0.4);
+    this.rainHissFilter.frequency.setTargetAtTime(drv ? 1800 : 4200, t, 0.2);
+    this.rainPatter.gain.setTargetAtTime(r * 0.12 * ground * (1 - drv * 0.5), t, 0.4);
+    this.roofDrum.gain.setTargetAtTime(r * drv * 0.45, t, 0.3);
+    // Individual fat drops ticking on the glass and roof.
+    this.dripT -= dt * r * (drv ? 22 : 9);
+    while (this.dripT < 0) {
+      this.dripT += rand(0.3, 1.7);
+      const ti = t + rand(0, 0.08);
+      this.noiseBurst(ti, 0.03, drv ? rand(1500, 3200) : rand(2500, 6000), 3, (drv ? 0.06 : 0.025) * rand(0.4, 1), this.panner(rand(-0.8, 0.8), this.master));
+    }
+
+    // Ground ambience fades with height above ground; fresh snow hushes it.
     const near = Math.max(0, Math.min(1, 1.15 - s.agl / 260));
-    this.ambience.gain.setTargetAtTime(near * 0.9 + 0.1, t, 0.5);
+    this.ambience.gain.setTargetAtTime((near * 0.9 + 0.1) * (1 - 0.55 * s.snow), t, 0.5);
+    const raining = s.rain > 0.15;
 
     // Road noise from the nearest vehicle.
     const road = s.car < 300 ? Math.min(0.35, (40 / Math.max(s.car, 8)) * (s.carSpeed / 25)) : 0;
@@ -476,22 +552,23 @@ export class SoundScape {
     const day = s.night < 0.3;
     const breeding = m >= 3 && m <= 7;
 
-    if (day && breeding && s.grass > 0.3 && T.lark <= 0) {
+    if (day && breeding && !raining && s.grass > 0.3 && T.lark <= 0) {
       this.meadowlark(t, rand(-0.8, 0.8), 0.05 * s.grass * near);
       T.lark = rand(5, 14);
     }
-    if (day && s.wet > 0.3 && T.blackbird <= 0) {
+    if (day && !raining && s.wet > 0.3 && T.blackbird <= 0) {
       this.blackbird(t, rand(-0.9, 0.9), 0.04 * s.wet * near);
       T.blackbird = rand(3, 9);
     }
-    // Chorus frogs: winter and spring nights near water.
-    if (s.night > 0.5 && (m <= 5 || m >= 11) && s.wet > 0.15 && T.frog <= 0) {
-      const n = 1 + Math.floor(s.wet * 4);
+    // Chorus frogs: winter and spring nights near water, loudest in the rain.
+    const frogWet = Math.min(1, s.wet + s.rain * 0.6);
+    if ((s.night > 0.5 || s.rain > 0.3) && (m <= 5 || m >= 11 || s.rain > 0.3) && frogWet > 0.15 && T.frog <= 0) {
+      const n = 1 + Math.floor(frogWet * 4);
       for (let i = 0; i < n; i++) this.frog(t + rand(0, 0.8), rand(-1, 1), 0.04 * near * rand(0.4, 1));
       T.frog = rand(0.4, 1.4);
     }
     // Field crickets on warm nights; Dolbear's law sets the chirp rate.
-    if (s.night > 0.4 && m >= 5 && m <= 10) {
+    if (s.night > 0.4 && m >= 5 && m <= 10 && !raining && s.snow < 0.1) {
       const tempC = [3, 5, 7, 9, 12, 15, 17, 16, 14, 10, 6, 3][m - 1] + 4;
       const perMin = Math.max(20, 7 * tempC + 30) * 0.5;
       for (const c of this.crickets) {
