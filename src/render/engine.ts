@@ -23,7 +23,7 @@ export class Engine {
   readonly grade: ShaderPass;
   /** Upper bound for adaptive resolution; the live ratio floats below it. */
   maxPixelRatio = Math.min(window.devicePixelRatio, 1.5);
-  minPixelRatio = 0.5;
+  minPixelRatio = 0.75;
   pixelRatio = this.maxPixelRatio;
   private frameMs = 16;
   private adaptCooldown = 2;
@@ -87,8 +87,8 @@ export class Engine {
     this.adaptCooldown -= dt;
     if (this.adaptCooldown > 0) return;
     let pr = this.pixelRatio;
-    if (this.frameMs > 25) pr *= 0.88;
-    else if (this.frameMs < 15) pr *= 1.06;
+    if (this.frameMs > 30) pr *= 0.9;
+    else if (this.frameMs < 18) pr *= 1.06;
     pr = Math.min(this.maxPixelRatio, Math.max(this.minPixelRatio, pr));
     if (Math.abs(pr - this.pixelRatio) > 0.01) {
       this.pixelRatio = pr;
