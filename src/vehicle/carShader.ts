@@ -109,9 +109,9 @@ void main() {
     return;
   } else if (part == 10) {
     float g = vnoise3(vLocal * 140.0);
-    alb = vec3(0.065, 0.06, 0.055) * (0.9 + 0.2 * g);
-    rough = 0.55;
-    coat = 0.08;
+    alb = vec3(0.04, 0.038, 0.036) * (0.9 + 0.2 * g);
+    rough = 0.5;
+    coat = 0.1;
   } else if (part == 4) {
     alb = vec3(0.6);
     rough = 0.1;

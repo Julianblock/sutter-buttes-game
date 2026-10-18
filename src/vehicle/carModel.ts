@@ -15,12 +15,12 @@ export const WHEEL_R = 0.4;
 export const EYE = new THREE.Vector3(-0.28, 1.5, -0.42);
 
 export const PAINTS: { id: string; name: string; hex: number }[] = [
-  { id: 'cherry', name: 'Cherry red', hex: 0x8c1414 },
-  { id: 'ranch', name: 'Ranch blue', hex: 0x1d3a5c },
+  { id: 'cherry', name: 'Cherry red', hex: 0xb01c1a },
+  { id: 'ranch', name: 'Ranch blue', hex: 0x2a5482 },
   { id: 'white', name: 'Oxford white', hex: 0xd8d8d2 },
-  { id: 'forest', name: 'Forest green', hex: 0x1f3a26 },
+  { id: 'forest', name: 'Forest green', hex: 0x2c5236 },
   { id: 'tan', name: 'Desert tan', hex: 0xa08860 },
-  { id: 'black', name: 'Black', hex: 0x0b0b0c },
+  { id: 'black', name: 'Black', hex: 0x121214 },
   { id: 'silver', name: 'Silver', hex: 0x8e9196 },
 ];
 
@@ -151,7 +151,8 @@ function bodyGeometry() {
 
   // Cabin.
   parts.push(span(-0.72, 1.0, 0.5, 0.62, -0.9, 0.9, P.DASH)); // floor
-  parts.push(span(0.62, 1.0, 0.85, 1.2, -0.92, 0.92, P.DASH)); // dash
+  const dash = [[1.0, 0.85], [1.0, 1.22], [0.86, 1.235], [0.72, 1.2], [0.63, 1.11], [0.62, 0.85]].map(([x, y]) => new THREE.Vector2(x, y));
+  parts.push(extrudeProfile(dash, 1.84, P.DASH));
   parts.push(span(0.57, 0.68, 1.15, 1.25, -0.64, -0.2, P.DASH)); // binnacle hood
   parts.push(span(0.615, 0.62, 1.03, 1.15, -0.6, -0.24, P.GAUGES)); // instruments
   parts.push(span(0.58, 0.66, 0.62, 1.0, -0.13, 0.13, P.DASH)); // console
