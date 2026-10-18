@@ -160,9 +160,14 @@ void main() {
   const mat2 ROT = mat2(0.8, 0.6, -0.6, 0.8);
   vec2 q1 = ROT * xz;
   vec2 q2 = ROT * q1;
-  float fine = vnoise(q1 / 2.9) * 0.5 + vnoise(q2 / 1.1) * 0.3 + vnoise(xz / 0.45) * 0.2;
-  float nearFade = clamp(1.0 - dist / 400.0, 0.0, 1.0);
-  alb *= mix(1.0, 0.86 + 0.28 * fine, detailFade);
+  // Each octave fades out before it shrinks below a pixel, so distant ground
+  // stays clean instead of shimmering with sub-pixel noise.
+  float fp = length(fwidth(xz));
+  float fine = (vnoise(q1 / 2.9) - 0.5) * 0.5 * smoothstep(3.0, 1.0, fp)
+             + (vnoise(q2 / 1.1) - 0.5) * 0.3 * smoothstep(1.1, 0.4, fp)
+             + (vnoise(xz / 0.45) - 0.5) * 0.2 * smoothstep(0.45, 0.16, fp);
+  float nearFade = clamp(1.0 - dist / 400.0, 0.0, 1.0) * smoothstep(2.0, 0.6, fp);
+  alb *= 1.0 + 0.56 * fine * detailFade;
   float h0 = vnoise(q1 / 3.7) + 0.5 * vnoise(q2 / 1.4);
   float hx = vnoise((q1 + vec2(0.5, 0.0)) / 3.7) + 0.5 * vnoise((q2 + vec2(0.5, 0.0)) / 1.4);
   float hz = vnoise((q1 + vec2(0.0, 0.5)) / 3.7) + 0.5 * vnoise((q2 + vec2(0.0, 0.5)) / 1.4);
