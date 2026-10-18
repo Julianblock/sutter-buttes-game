@@ -78,7 +78,7 @@ export const WEATHERS: Record<Weather, WeatherSpec> = {
   tulefog: { label: 'Tule Fog', mie: 1.8, cloud: 0.0, fog: 0.011, fogTop: 135, wind: 0.4, rain: 0, snow: 0, wet: 0.3, cover: 0 },
   rain: { label: 'Rain', mie: 5.5, cloud: 1, fog: 0, fogTop: -1000, wind: 5.5, rain: 0.65, snow: 0, wet: 0.85, cover: 0 },
   storm: { label: 'Thunderstorm', mie: 7.5, cloud: 1, fog: 0, fogTop: -1000, wind: 9.5, rain: 1, snow: 0, lightning: true, wet: 1, cover: 0 },
-  snow: { label: 'Snow', mie: 7.0, cloud: 1, fog: 0, fogTop: -1000, wind: 2.5, rain: 0, snow: 0.8, wet: 0.35, cover: 0.8 },
+  snow: { label: 'Snow', mie: 4.0, cloud: 1, fog: 0, fogTop: -1000, wind: 2.5, rain: 0, snow: 0.6, wet: 0.35, cover: 0.55 },
 };
 
 /** A lightning strike: where it hit and how far from the listener. */
@@ -253,7 +253,9 @@ export class Environment {
     const temp = this.snowFall > 0.02 ? 0 : monthly(K.tempC, mf) - 9 * (1 - Math.min(1, sunUp * 3));
     const melt = Math.max(0, temp) * 0.0004 * (1 + sunUp * (1 - w.cloud)) + this.rain * 0.008;
     const prevCover = this.snowCover;
-    this.snowCover = THREE.MathUtils.clamp(this.snowCover + (this.snowFall * dt) / 240 - melt * dt, 0, 1);
+    // Wet valley snow builds slowly and never quite buries the lowlands.
+    const settle = ((this.snowFall * dt) / 600) * Math.max(0, 0.65 - this.snowCover);
+    this.snowCover = THREE.MathUtils.clamp(this.snowCover + settle - melt * dt, 0, 1);
     const meltWater = Math.max(0, prevCover - this.snowCover) * 3;
 
     const dry = (0.00025 + 0.0015 * sunUp * (1 - w.cloud)) * (1 + Math.hypot(G.uWind.value.x, G.uWind.value.y) * 0.08);
