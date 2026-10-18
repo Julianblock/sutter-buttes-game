@@ -23,6 +23,7 @@ uniform vec2 uFadeIn;     // density ramps up between these distances
 uniform vec2 uFadeOut;    // and back down between these
 uniform float uGrassH;    // seasonal sward height (m)
 uniform float uSeedHead;  // 0..1 share of grasses in seed (late spring - summer)
+uniform vec4 uCar;        // player truck: x, z, sin(heading), cos(heading); 0 heading vector = none
 in float aBlade;          // blade index within the clump
 ${windCommon}
 out vec3 vWorld;
@@ -56,6 +57,8 @@ void main() {
   float d = distance(centre, uCamPos.xz);
   float keep = smoothstep(uFadeIn.x, uFadeIn.y, d) * (1.0 - smoothstep(uFadeOut.x, uFadeOut.y, d));
   if (h21(cc * 0.07 + 3.3) > keep) { collapse(); return; }
+  vec2 dc = centre - uCar.xy;
+  if (dot(uCar.zw, uCar.zw) > 0.5 && abs(dot(dc, uCar.zw)) < 3.1 && abs(dot(dc, vec2(uCar.w, -uCar.z))) < 1.15) { collapse(); return; }
 
   // Habitat: open natural grassland only (no canopy, rock, crops or water).
   vec2 lcUV = centre / uLcSize + 0.5;

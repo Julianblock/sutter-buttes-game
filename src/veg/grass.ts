@@ -59,6 +59,7 @@ export class Grass {
   readonly group = new THREE.Group();
   private rings: Ring[] = [];
   private hf: Heightfield;
+  private car = { value: new THREE.Vector4() };
   maxAgl = 160;
 
   constructor(terrainUniforms: Record<string, THREE.IUniform>, hf: Heightfield) {
@@ -74,6 +75,7 @@ export class Grass {
       uRegionSize: terrainUniforms.uRegionSize,
       uLcSize: terrainUniforms.uLcSize,
       uVeg: seasonUniforms.uVeg,
+      uCar: this.car,
     };
     // Inner: fine clumps to ~55 m. Outer: coarse, wider-bladed clumps to ~120 m.
     const specs = [
@@ -105,6 +107,11 @@ export class Grass {
       this.group.add(mesh);
       this.rings.push({ mesh, mat, spacing: s.spacing, n: s.n });
     }
+  }
+
+  /** Flattens grass under the player's truck. */
+  setCar(x: number, z: number, psi: number, on: boolean) {
+    this.car.value.set(x, z, on ? Math.sin(psi) : 0, on ? Math.cos(psi) : 0);
   }
 
   update(cam: THREE.Vector3, month: number) {
