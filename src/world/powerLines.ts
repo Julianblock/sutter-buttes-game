@@ -175,7 +175,8 @@ export class PowerLines {
       glslVersion: THREE.GLSL3,
       vertexShader: wireVertex,
       fragmentShader: wireFragment,
-      uniforms: { ...G, uPixelAngle: { value: 0.001 } },
+      // Weathered stranded aluminium.
+      uniforms: { ...G, uPixelAngle: { value: 0.001 }, uFar: { value: 9000 }, uWireColor: { value: new THREE.Vector3(0.22, 0.23, 0.24) } },
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,

@@ -5,6 +5,7 @@ export const wireVertex = /* glsl */ `
 #include <logdepthbuf_pars_vertex>
 uniform vec3 uCamPos;
 uniform float uPixelAngle;
+uniform float uFar;       // wires fade out by this distance (m)
 in vec2 aStrip;   // t along span, side (-1/1)
 in vec4 aP0;      // start xyz, sag (m)
 in vec4 aP1;      // end xyz, conductor radius (m)
@@ -22,7 +23,7 @@ void main() {
   vec3 toCam = uCamPos - world;
   float dist = length(toCam);
   vec3 midSpan = mix(aP0.xyz, aP1.xyz, 0.5);
-  if (distance(midSpan.xz, uCamPos.xz) > 9000.0 + distance(aP0.xz, aP1.xz)) {
+  if (distance(midSpan.xz, uCamPos.xz) > uFar + distance(aP0.xz, aP1.xz)) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
@@ -45,6 +46,8 @@ void main() {
 export const wireFragment = /* glsl */ `
 ${lightingCommon}
 #include <logdepthbuf_pars_fragment>
+uniform float uFar;
+uniform vec3 uWireColor;
 in vec3 vWorld;
 in vec3 vTangent;
 in float vSide;
@@ -60,14 +63,13 @@ void main() {
   // Round conductor: normal sweeps across the ribbon.
   float s = clamp(vSide, -1.0, 1.0);
   vec3 n = normalize(facing * sqrt(max(0.0, 1.0 - s * s)) + across * s);
-  // Weathered stranded aluminium.
-  vec3 alb = vec3(0.22, 0.23, 0.24);
+  vec3 alb = uWireColor;
   float shadow = shadowAt(vWorld, 0.0008);
   vec3 col = shadeSurface(alb, n, vWorld, 1.0, 0.45, shadow);
   col = applyAtmosphere(col, vWorld);
   float edge = 1.0 - smoothstep(0.55, 1.0, abs(vSide));
   float dist = length(v);
-  float a = pow(vCover, 0.75) * edge * (1.0 - smoothstep(6000.0, 9000.0, dist));
+  float a = pow(vCover, 0.75) * edge * (1.0 - smoothstep(uFar * 0.66, uFar, dist));
   outColor = vec4(col, a);
 }
 `;
