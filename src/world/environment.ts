@@ -378,7 +378,8 @@ export class Environment {
     const deck = THREE.MathUtils.smoothstep(Math.max(this.rain, this.snowFall), 0, 0.2);
     if (deck > 0 && sunAlt > -6) {
       const deckT = THREE.MathUtils.lerp(0.3, 0.12, this.rain) + this.snowFall * 0.08;
-      e *= THREE.MathUtils.lerp(1, 0.85 / deckT, deck);
+      // Storms are left darker than a grey drizzle.
+      e *= THREE.MathUtils.lerp(1, (0.85 / deckT) * (1 - 0.35 * this.rain), deck);
     }
     return e;
   }
