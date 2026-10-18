@@ -144,29 +144,42 @@ void main() {
   float r = R_GROUND + max(uCamPos.y, 1.0);
   vec3 Tview = hitsGround(r, dir.y) ? vec3(0.0) : texture(uTransmittanceLUT, transmittanceUV(r, dir.y)).rgb;
 
+  float deck = overcastDeck();
+  float clearSky = 1.0 - deck;
+  if (deck > 0.0) {
+    // Ragged scud and darker rain-laden bases drifting under the deck.
+    vec2 q = dir.xz / max(dir.y, 0.04) * 1.6 + uCloudOffset / 2500.0;
+    float scud = fbm(q, 5);
+    float above = smoothstep(-0.02, 0.12, dir.y);
+    col *= mix(1.0, 0.7 + 0.55 * scud, deck * above);
+    col += vec3(0.78, 0.82, 1.0) * uFlash * uInvExposure * 0.7 * (0.5 + 0.9 * scud) * above;
+  }
+
   // Sun disk with limb darkening.
   float cs = dot(dir, uSunDir);
   float sunR = SUN_ANGULAR_RADIUS * 1.3;
   if (cs > cos(sunR)) {
     float x = acos(clamp(cs, -1.0, 1.0)) / sunR;
     float limb = pow(max(1.0 - x * x, 0.0), 0.35);
-    col += vec3(1.0, 0.98, 0.95) * SUN_ILLUMINANCE * 2500.0 * limb * Tview;
+    col += vec3(1.0, 0.98, 0.95) * SUN_ILLUMINANCE * 2500.0 * limb * Tview * clearSky;
   }
 
   vec3 eq = transpose(uCelestial) * dir;
   vec3 night = (starField(eq) + milkyWay(eq)) * uStarBrightness;
   float twinkle = 0.75 + 0.5 * vnoise(eq.xy * 800.0 + uTime * 3.0);
-  col += night * Tview * mix(1.0, twinkle, 1.0 - dir.y);
-  col += moonDisk(dir) * Tview * max(uMoonScale, 2e-6) * 1200.0;
+  col += night * Tview * mix(1.0, twinkle, 1.0 - dir.y) * clearSky;
+  col += moonDisk(dir) * Tview * max(uMoonScale, 2e-6) * 1200.0 * clearSky;
 
   // Sodium/LED skyglow from Yuba City (E-SE) and Sacramento (S) near the horizon.
   float hz = exp(-max(dir.y, 0.0) * 22.0);
   vec2 dh = normalize(dir.xz + 1e-5);
   float yuba = pow(max(dot(dh, normalize(vec2(1.0, 0.35))), 0.0), 6.0);
   float sac = pow(max(dot(dh, normalize(vec2(0.15, 1.0))), 0.0), 10.0);
-  col += vec3(1.0, 0.55, 0.25) * (yuba * 0.0018 + sac * 0.0022 + 0.00004) * hz * uNight;
+  // Low cloud reflects the town lights back down as an orange ceiling glow.
+  float glow = mix(hz, 0.35 + 0.65 * hz, deck) * (1.0 + deck * 1.5);
+  col += vec3(1.0, 0.55, 0.25) * (yuba * 0.0018 + sac * 0.0022 + 0.00004 + deck * 0.0005) * glow * uNight;
 
-  vec4 cl = cloudLayer(dir);
+  vec4 cl = cloudLayer(dir) * clearSky;
   col = col * (1.0 - cl.a) + cl.rgb;
 
   if (uFogDensity > 0.0 && uCamPos.y < uFogTop + 30.0) {
