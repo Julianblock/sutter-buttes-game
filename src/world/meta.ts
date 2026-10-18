@@ -43,6 +43,8 @@ export interface OsmRoad {
   kind: string;
   lanes: number;
   oneway?: number;
+  /** OSM tracktype 1 (solid gravel) … 5 (faint two-rut), 0 when untagged. */
+  grade?: number;
   pts: number[];
 }
 
