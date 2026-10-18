@@ -57,4 +57,5 @@ export interface OsmData {
   peaks: { name: string; x: number; z: number; ele: number | null }[];
   places: { name: string; x: number; z: number; kind: string }[];
   masts: { name: string; x: number; z: number; height: number | null }[];
+  cemeteries: { name: string; pts: number[] }[];
 }

@@ -35,6 +35,8 @@ export interface CemeteryPlan {
   /** Gate on the boundary, and the outward direction toward the road. */
   gate: [number, number] | null;
   out: [number, number];
+  /** Unit direction of the fence side the gate sits in. */
+  along: [number, number];
   /** Old shade oaks in the plot. */
   trees: PlantedTree[];
 }
@@ -102,13 +104,20 @@ export function planCemeteries(osm: OsmData, radius = 14000): CemeteryPlan[] {
     }
     let gate: [number, number] | null = null;
     let out: [number, number] = [1, 0];
+    let along: [number, number] = [0, 1];
     if (best < 800) {
+      // Gate in the middle of the fence side facing the road.
       let gd = Infinity;
       for (let i = 0; i + 3 < poly.length; i += 2) {
-        const [x, z, d] = closest(rx, rz, poly[i], poly[i + 1], poly[i + 2], poly[i + 3]);
-        if (d < gd) (gd = d), (gate = [x, z]);
+        const ex = poly[i + 2] - poly[i], ez = poly[i + 3] - poly[i + 1];
+        const el = Math.hypot(ex, ez);
+        if (el < 8) continue;
+        const mx = poly[i] + ex / 2, mz = poly[i + 1] + ez / 2;
+        const d = Math.hypot(rx - mx, rz - mz);
+        if (d < gd) (gd = d), (gate = [mx, mz]), (along = [ex / el, ez / el]);
       }
-      const g = gate!;
+      if (!gate) gate = [poly[0], poly[1]];
+      const g = gate;
       const dx = rx - g[0], dz = rz - g[1];
       const l = Math.hypot(dx, dz);
       out = l > 0.5 ? [dx / l, dz / l] : [(g[0] - cx) / Math.hypot(g[0] - cx, g[1] - cz), (g[1] - cz) / Math.hypot(g[0] - cx, g[1] - cz)];
@@ -116,7 +125,7 @@ export function planCemeteries(osm: OsmData, radius = 14000): CemeteryPlan[] {
       const pts = l > 3 ? [rx, rz, g[0], g[1], cx, cz] : [g[0], g[1], cx, cz];
       osm.roads.push({ name: c.name || 'Cemetery lane', kind: 'track', grade: 2, lanes: 0, pts });
     }
-    plans.push({ name: c.name, poly, cx, cz, gate, out, trees: shadeTrees(c.name, poly, cx, cz, gate) });
+    plans.push({ name: c.name, poly, cx, cz, gate, out, along, trees: shadeTrees(c.name, poly, cx, cz, gate) });
   }
   return plans;
 }
@@ -473,7 +482,7 @@ export class Cemeteries {
     if (gate) {
       // Concrete gate pillars either side of the opening.
       const [ox, oz] = plan.out;
-      const sx = -oz, sz = ox;
+      const [sx, sz] = plan.along;
       const c = new THREE.Color('#c8c2b4');
       for (const side of [-1, 1]) {
         const x = gate[0] + sx * GATE_HALF * side, z = gate[1] + sz * GATE_HALF * side;
@@ -487,7 +496,7 @@ export class Cemeteries {
   private signs(m: Mesher, plan: CemeteryPlan, ch: Character, hf: Heightfield, name: [number, number, number, number], closed: [number, number, number, number]) {
     const gate = plan.gate!;
     const [ox, oz] = plan.out;
-    const sx = -oz, sz = ox;
+    const [sx, sz] = plan.along;
     const yaw = Math.atan2(ox, oz);
     const mat = new THREE.Matrix4();
     const tmp = new THREE.Matrix4();
