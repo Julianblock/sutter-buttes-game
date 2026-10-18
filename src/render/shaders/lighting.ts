@@ -213,6 +213,11 @@ float fogDepth(float y0, float y1, float d) {
   return uFogDensity * d * inside;
 }
 
+/** Optical depth of falling rain / snow (visibility ~2.5 km in heavy rain, ~1 km in snow). */
+float precipDepth(float d) {
+  return (uRain * 0.0011 + uSnowFall * 0.0028) * min(d, 30000.0);
+}
+
 /** Transmittance of the camera-to-point segment (air and tule fog), for emitters. */
 vec3 segmentTransmittance(vec3 wp) {
   vec3 v = wp - uCamPos;
@@ -220,7 +225,7 @@ vec3 segmentTransmittance(vec3 wp) {
   float dy = v.y / max(d, 1e-3);
   vec3 tau = RAYLEIGH_SCAT * layerDepth(uCamPos.y, dy, d, RAYLEIGH_H)
            + vec3(MIE_EXT * uMieScale) * layerDepth(uCamPos.y, dy, d, MIE_H);
-  return exp(-tau - fogDepth(uCamPos.y, wp.y, d));
+  return exp(-tau - fogDepth(uCamPos.y, wp.y, d) - precipDepth(d));
 }
 
 /** Aerial perspective: attenuates a lit surface and adds in-scattered sky light. */
@@ -242,6 +247,12 @@ vec3 applyAtmosphere(vec3 color, vec3 wp) {
   vec3 sky = skyRadianceDir(dir);
   vec3 inscatter = sky * clamp((1.0 - T) / max(1.0 - exp(-tauFull), vec3(1e-4)), 0.0, 1.0);
   color = color * T + inscatter;
+
+  float pd = precipDepth(d);
+  if (pd > 0.0) {
+    float Tp = exp(-pd);
+    color = color * Tp + deckRadiance(vec3(0.0, 0.15, 0.0)) * 0.95 * (1.0 - Tp);
+  }
 
   float fog = fogDepth(y0, wp.y, d);
   if (fog > 0.0) {
