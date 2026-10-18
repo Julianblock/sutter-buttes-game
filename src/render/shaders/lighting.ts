@@ -205,7 +205,7 @@ float nearShadow(vec3 wp, float bias) {
   if (uShadowOn < 0.5) return 1.0;
   vec4 sc = uShadowMatrix * vec4(wp, 1.0);
   vec3 p = sc.xyz / sc.w;
-  if (any(lessThan(p.xy, vec2(0.001))) || any(greaterThan(p.xy, vec2(0.999)))) return 1.0;
+  if (any(lessThan(p.xy, vec2(0.001))) || any(greaterThan(p.xy, vec2(0.999))) || p.z > 0.999) return 1.0;
   vec2 texel = 1.0 / vec2(textureSize(uShadowMap, 0));
   // Smooth 3x3-texel PCF with bilinear weights: soft, stable edges with no
   // per-pixel noise (random rotations read as grain, especially from altitude).
