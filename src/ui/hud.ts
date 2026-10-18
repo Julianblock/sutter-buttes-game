@@ -109,7 +109,7 @@ export class Hud {
       this.setPlace(this.places.at(c.pos.x, c.pos.z, 2));
       const onRoad = c.road && c.road.dist < c.road.halfWidth + 0.6;
       const cond = c.surface.label !== c.surface.name ? ` · ${c.surface.label}` : '';
-      this.chip.textContent = onRoad ? (c.road!.name || 'Unnamed road') + cond : `Off road · ${c.surface.label}`;
+      this.chip.textContent = onRoad ? (c.road!.name || (c.road!.kind === 'track' ? 'Ranch track' : 'Unnamed road')) + cond : `Off road · ${c.surface.label}`;
       this.chip.classList.add('show');
     }
     this.placeTimer -= dt;
