@@ -293,6 +293,7 @@ async function boot() {
     speed: 0, agl: 100, flapPhase: 0, flapAmount: 0, perched: false, night: 0, month: 6, hour: 12,
     wet: 0, grass: 0, geese: Infinity, cattle: Infinity, car: Infinity, carSpeed: 0, active: false,
     drive: 0, rpm: 0, throttle: 0, tyre: 0, slip: 0, horn: false,
+    rain: 0, snow: 0, roadWet: 0, windSpeed: 0,
   };
   let habitatT = 0;
   const updateSound = (dt: number) => {
@@ -336,6 +337,12 @@ async function boot() {
     aud.month = env.month;
     aud.hour = env.hours;
     aud.active = mode === 'fly' && !free;
+    aud.rain = G.uRain.value;
+    aud.snow = G.uSnowCover.value;
+    aud.roadWet = G.uWet.value;
+    aud.windSpeed = G.uWind.value.length();
+    env.listener.copy(cam.position);
+    for (const strike of env.takeStrikes()) sound.thunder(strike.dist);
     sound.update(dt, aud);
   };
 
