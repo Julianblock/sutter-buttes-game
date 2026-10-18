@@ -5,6 +5,8 @@ export class Controls {
   keys = new Set<string>();
   invertPitch = false;
   readonly input: FlightInput = emptyInput();
+  /** On-screen thumb-stick, -1..1 (x right, y down). */
+  readonly touch = { x: 0, y: 0 };
   private pressed = new Set<string>();
   private padTakeoff = false;
 
@@ -33,6 +35,8 @@ export class Controls {
     if (this.invertPitch) pitch = -pitch;
     let roll = axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']);
     let yaw = axis(['KeyE'], ['KeyQ']);
+    roll += this.touch.x;
+    pitch += (this.invertPitch ? -1 : 1) * this.touch.y;
     let flap = k.has('Space') ? 1 : 0;
     let tuck = k.has('ShiftLeft') || k.has('ShiftRight') ? 1 : 0;
     let brake = k.has('ControlLeft') || k.has('KeyB') || k.has('KeyF') ? 1 : 0;

@@ -9,16 +9,34 @@ export class DriveControls {
   lookDX = 0;
   lookDY = 0;
   private dragging = false;
+  private finger = -1;
+  private last = { x: 0, y: 0 };
 
   constructor(private controls: Controls, private el: HTMLElement) {
     el.addEventListener('pointerdown', (e) => {
       if (!this.enabled || e.button !== 0) return;
+      if (e.pointerType === 'touch') {
+        // Drag a finger across the view to look around.
+        if (this.finger === -1) (this.finger = e.pointerId), (this.last = { x: e.clientX, y: e.clientY });
+        return;
+      }
       this.dragging = true;
       if (document.pointerLockElement !== el) el.requestPointerLock?.()?.catch?.(() => {});
     });
-    addEventListener('pointerup', () => (this.dragging = false));
+    const lift = (e: PointerEvent) => {
+      if (e.pointerId === this.finger) this.finger = -1;
+      else this.dragging = false;
+    };
+    addEventListener('pointerup', lift);
+    addEventListener('pointercancel', lift);
+    el.addEventListener('pointermove', (e) => {
+      if (!this.enabled || e.pointerId !== this.finger) return;
+      this.lookDX += (e.clientX - this.last.x) * 0.005;
+      this.lookDY += (e.clientY - this.last.y) * 0.005;
+      this.last = { x: e.clientX, y: e.clientY };
+    });
     addEventListener('mousemove', (e) => {
-      if (!this.enabled) return;
+      if (!this.enabled || this.finger !== -1) return;
       if (document.pointerLockElement === el || this.dragging) {
         this.lookDX += e.movementX * 0.0022;
         this.lookDY += e.movementY * 0.0022;
@@ -42,6 +60,11 @@ export class DriveControls {
     let steer = (has('KeyA', 'ArrowLeft') ? 1 : 0) - (has('KeyD', 'ArrowRight') ? 1 : 0);
     let handbrake = has('Space') ? 1 : 0;
     let boost = has('ShiftLeft', 'ShiftRight', 'KeyR') ? 1 : 0;
+    // Thumb-stick: sideways steers; pushing it up or down works the pedals too.
+    const t = this.controls.touch;
+    steer -= t.x;
+    throttle = Math.max(throttle, Math.max(0, -t.y - 0.25) / 0.75);
+    brake = Math.max(brake, Math.max(0, t.y - 0.25) / 0.75);
 
     const pad = navigator.getGamepads?.().find((p) => p && p.connected);
     if (pad) {
