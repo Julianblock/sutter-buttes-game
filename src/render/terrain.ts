@@ -87,6 +87,10 @@ export class Terrain {
     this.mesh.name = 'terrain';
   }
 
+  get geometry() {
+    return this.geo;
+  }
+
   get material() {
     return this.mesh.material as THREE.ShaderMaterial;
   }
