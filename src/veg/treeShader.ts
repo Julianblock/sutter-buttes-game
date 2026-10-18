@@ -167,7 +167,8 @@ void main() {
     float edge = 1.0 - abs(dot(normalize(vClusterN), V));
     float leafy = vnoise3(vLocal * 46.0 + vSeed * 3.0);
     bool inner = vLeaf > 1.5;
-    if (!inner && dist < 900.0 && edge > 0.5 && leafy < (edge - 0.5) * 2.4 * smoothstep(900.0, 500.0, dist)) discard;
+    float leafyScale = smoothstep(0.012, 0.004, length(fwidth(vLocal)));
+    if (!inner && edge > 0.5 && leafy < (edge - 0.5) * 2.4 * leafyScale) discard;
     vec3 leafC = uLeafColor[vSpecies] * (0.82 + 0.36 * fract(vSeed * 91.7));
     leafC *= 0.8 + 0.4 * nz;
     // Leaf structure at two scales: individual leaves up close, then leaf
