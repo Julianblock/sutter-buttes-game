@@ -100,9 +100,25 @@ void main() {
   alb = mix(alb, mc, m);
 
   vec3 n = normalize(vNormal);
+  // Rain: asphalt soaks dark; water films over it and pools in dips, ruts and
+  // on the gravel shoulder.
+  alb = wetten(alb, mix(1.0, 0.7, onRoad));
+  float dips = vnoise(p * 0.31) * 0.65 + grain * 0.35;
+  float ruts = band(lane, 0.5, 1.1, 0.3) + band(lane, 2.4, 3.0, 0.3);
+  float film = smoothstep(0.15, 0.8, uWet) * mix(0.35, 0.75, onRoad);
+  film = max(film, smoothstep(0.62, 0.78, dips + ruts * 0.08 * onRoad) * smoothstep(0.4, 0.9, uWet));
+
+  // Snow covers the road except where traffic has packed it into slushy tracks.
+  float traffic = clamp(vInfo.z / 3.0, 0.2, 1.0) * onRoad;
+  float snowR = snowAmount(vec3(0.0, 1.0, 0.0), p) * (1.0 - ruts * 0.8 * traffic);
+  vec3 slush = mix(vec3(0.32, 0.33, 0.34), SNOW_ALB, 0.25);
+  alb = mix(alb, mix(slush, SNOW_ALB * 0.92, smoothstep(0.6, 0.95, snowR)), smoothstep(0.05, 0.4, snowR));
+  film *= 1.0 - smoothstep(0.5, 0.9, snowR);
+
   float shadow = shadowAt(vWorld + n * 0.4, 0.00025);
-  float rough = mix(0.85, 0.55, m);
+  float rough = mix(mix(0.85, 0.55, m), 0.35, uWet);
   vec3 col = shadeSurface(alb, n, vWorld, 1.0, rough, shadow);
+  col = wetSurface(col, n, vWorld, film, shadow);
   col = applyAtmosphere(col, vWorld);
   // Fade the ribbon into the orthophoto (which already shows the road) far away.
   float fade = 1.0 - smoothstep(2500.0, 6000.0, dist);
