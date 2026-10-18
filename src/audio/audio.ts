@@ -21,6 +21,12 @@ export interface AudioState {
   car: number; // distance to nearest vehicle (m)
   carSpeed: number;
   active: boolean; // flying (not in the menu)
+  drive: number; // 1 while in the pickup
+  rpm: number; // 0..1
+  throttle: number;
+  tyre: number; // surface roughness 0..1
+  slip: number; // 0..1 lateral slide
+  horn: boolean;
 }
 
 type CallType = 'scream' | 'kak' | 'whistle' | 'honk' | 'bugle' | 'croak' | 'shriek' | 'chitter' | 'hiss';
@@ -56,6 +62,13 @@ export class SoundScape {
   private roadGain!: GainNode;
   private roadFilter!: BiquadFilterNode;
   private ambience!: GainNode;
+  private engineGain!: GainNode;
+  private engineFilter!: BiquadFilterNode;
+  private engineOsc: { o: OscillatorNode; mul: number }[] = [];
+  private tyreGain!: GainNode;
+  private tyreFilter!: BiquadFilterNode;
+  private squealGain!: GainNode;
+  private hornGain!: GainNode;
   private lastSin = 0;
   private timers = { lark: 4, cricket: 0, frog: 0, honk: 0, moo: 8, coyote: 30, blackbird: 6 };
   private crickets: { rate: number; pan: number; next: number }[] = [];
@@ -123,6 +136,48 @@ export class SoundScape {
     this.roadGain = ctx.createGain();
     this.roadGain.gain.value = 0;
     loop().connect(this.roadFilter).connect(this.roadGain).connect(this.ambience);
+
+    // Pickup: V8 firing note, tyre roar, skid squeal and horn.
+    this.engineGain = ctx.createGain();
+    this.engineGain.gain.value = 0;
+    this.engineFilter = ctx.createBiquadFilter();
+    this.engineFilter.type = 'lowpass';
+    this.engineFilter.Q.value = 2;
+    this.engineFilter.connect(this.engineGain).connect(this.master);
+    for (const [type, mul, g] of [['sawtooth', 1, 0.5], ['square', 0.5, 0.35], ['sine', 0.25, 0.6]] as const) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      const og = ctx.createGain();
+      og.gain.value = g;
+      o.connect(og).connect(this.engineFilter);
+      o.start();
+      this.engineOsc.push({ o, mul });
+    }
+    this.tyreFilter = ctx.createBiquadFilter();
+    this.tyreFilter.type = 'lowpass';
+    this.tyreGain = ctx.createGain();
+    this.tyreGain.gain.value = 0;
+    loop().connect(this.tyreFilter).connect(this.tyreGain).connect(this.master);
+    const sq = ctx.createBiquadFilter();
+    sq.type = 'bandpass';
+    sq.frequency.value = 1300;
+    sq.Q.value = 9;
+    this.squealGain = ctx.createGain();
+    this.squealGain.gain.value = 0;
+    loop().connect(sq).connect(this.squealGain).connect(this.master);
+    this.hornGain = ctx.createGain();
+    this.hornGain.gain.value = 0;
+    const hf = ctx.createBiquadFilter();
+    hf.type = 'lowpass';
+    hf.frequency.value = 2200;
+    hf.connect(this.hornGain).connect(this.master);
+    for (const f of [349, 440]) {
+      const o = ctx.createOscillator();
+      o.type = 'square';
+      o.frequency.value = f;
+      o.connect(hf);
+      o.start();
+    }
 
     for (let i = 0; i < 7; i++) this.crickets.push({ rate: rand(0.9, 1.1), pan: rand(-1, 1), next: rand(0, 1) });
   }
@@ -368,8 +423,20 @@ export class SoundScape {
     const t = ctx.currentTime;
     const k = 0.15;
 
+    // Pickup sounds; the cab muffles the wind.
+    const drv = s.active ? s.drive : 0;
+    const firing = 26 + s.rpm * 230;
+    for (const e of this.engineOsc) e.o.frequency.setTargetAtTime(firing * e.mul * (1 + Math.sin(t * 31) * 0.004), t, 0.05);
+    this.engineFilter.frequency.setTargetAtTime(220 + s.rpm * 900 + s.throttle * 1100, t, 0.08);
+    this.engineGain.gain.setTargetAtTime(drv * (0.05 + s.throttle * 0.07 + s.rpm * 0.05), t, 0.08);
+    const sp = Math.abs(s.speed) * drv;
+    this.tyreGain.gain.setTargetAtTime(Math.min(0.3, sp * 0.006 * (1 + s.tyre * 2.5)), t, 0.15);
+    this.tyreFilter.frequency.setTargetAtTime(250 + sp * 18 + s.tyre * 500, t, 0.15);
+    this.squealGain.gain.setTargetAtTime(drv * Math.max(0, s.slip - 0.25) * (1 - s.tyre) * 0.5 * Math.min(1, sp / 6), t, 0.05);
+    this.hornGain.gain.setTargetAtTime(s.horn && drv ? 0.07 : 0, t, 0.02);
+
     // Wind: louder and brighter with airspeed; quieter when perched or in the menu.
-    const v = s.active && !s.perched ? s.speed : 1.5;
+    const v = (s.active && !s.perched ? s.speed : 1.5) * (1 - drv * 0.55);
     this.windGain.gain.setTargetAtTime(Math.min(0.9, 0.04 + Math.pow(v / 22, 2) * 0.5), t, k);
     this.windFilter.frequency.setTargetAtTime(180 + v * v * 3.2, t, k);
     const stoop = Math.max(0, (v - 28) / 30);
