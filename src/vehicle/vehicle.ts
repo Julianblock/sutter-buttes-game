@@ -26,6 +26,12 @@ export class Vehicle {
     this.sync(0, 0, false);
   }
 
+  place(x: number, z: number, psi: number) {
+    this.physics.place(x, z, psi);
+    this.model.object.visible = true;
+    this.sync(0, 0, false);
+  }
+
   step(dt: number, inp: DriveInput) {
     this.physics.step(dt, inp);
   }

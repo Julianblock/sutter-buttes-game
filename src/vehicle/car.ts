@@ -136,6 +136,11 @@ export class CarPhysics {
       x += rx * Math.min(hit.halfWidth * 0.5, 2.2);
       z += rz * Math.min(hit.halfWidth * 0.5, 2.2);
     }
+    this.place(x, z, psi);
+  }
+
+  /** Puts the car at rest exactly at (x, z) facing `psi`. */
+  place(x: number, z: number, psi: number) {
     this.pos.set(x, this.hf.height(x, z), z);
     this.psi = psi;
     this.vel.set(0, 0, 0);
