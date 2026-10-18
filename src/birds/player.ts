@@ -20,6 +20,8 @@ export class Player {
     this.species = species;
     this.palette = palette;
     this.flight = new FlightModel(species, hf, air);
+    // Drawn a touch larger than life so the bird reads well against the scenery.
+    this.object.scale.setScalar(1.2);
     this.setBird(species, palette);
   }
 
