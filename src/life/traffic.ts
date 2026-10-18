@@ -185,6 +185,8 @@ export class Traffic {
     });
 
     this.lights = new LightPoints(new Array(this.cars.length * 4 * 8).fill(0), true);
+    // Drivers switch their lamps on in murk as well as at night.
+    this.lights.material.uniforms.uNight = { value: 0 };
     this.group.add(this.lights.points);
   }
 
@@ -315,8 +317,13 @@ export class Traffic {
     car.vt = e.speed * (0.88 + Math.random() * 0.22) * (car.type === 2 ? 0.9 : 1);
   }
 
-  update(dt: number, camPos: THREE.Vector3, night: number) {
+  /**
+   * @param lamps how brightly lamps burn (night, or murky weather by day)
+   * @param pace  fraction of free-flow speed drivers keep (slower in rain and snow)
+   */
+  update(dt: number, camPos: THREE.Vector3, night: number, lamps = night, pace = 1) {
     dt = Math.min(dt, 0.1);
+    this.lights.material.uniforms.uNight.value = lamps;
     // Simple car following within each edge and direction.
     this.buckets.clear();
     for (const c of this.cars) {
@@ -340,7 +347,7 @@ export class Traffic {
     let li = 0;
     const lp = this.lights;
     for (const c of this.cars) {
-      c.v += (c.vt - c.v) * Math.min(1, dt * 0.5);
+      c.v += (c.vt * pace - c.v) * Math.min(1, dt * 0.5);
       let e = this.edges[c.e];
       c.s += c.v * dt * c.dir;
       if (c.s > e.len || c.s < 0) {
@@ -378,7 +385,7 @@ export class Traffic {
       const ang = Math.atan2(uz, ux);
       this.t0[c.type].set([c.x, c.y, c.z, ang], c.slot * 4);
 
-      if (night > 0.02 && d2 < 15000 * 15000) {
+      if (lamps > 0.02 && d2 < 15000 * 15000) {
         const t = TYPES[c.type];
         const half = t.len / 2;
         // Headlights are directional: bright toward the viewer, faint from behind.
