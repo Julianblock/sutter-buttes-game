@@ -22,6 +22,10 @@ const LOD0 = 170;
 const LOD1 = 1900;
 const LOD2 = 6500;
 const CAP = [14000, 70000, 90000];
+/** Beyond the imagery zone, tiles are grown procedurally within this range. */
+const OUTER_R = 2600;
+const OUTER_DROP = 3600;
+const LC_HALF = 25000;
 
 // Month keyframes (Jan..Dec) for leaf amount per species.
 const LEAF_KF: number[][] = [
@@ -68,6 +72,17 @@ function kf(keys: number[], m: number) {
   return keys[i0] + (keys[i1] - keys[i0]) * t;
 }
 
+/** Same as the GLSL hash12, so 3D groves land on the terrain's farmsteads. */
+export function hash12(x: number, y: number) {
+  const f = (v: number) => v - Math.floor(v);
+  let a = f(x * 0.1031), b = f(y * 0.1031), c = f(x * 0.1031);
+  const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33);
+  a += d;
+  b += d;
+  c += d;
+  return f((a + b) * c);
+}
+
 function hash(n: number) {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return s - Math.floor(s);
@@ -99,6 +114,9 @@ export class Trees {
   total = 0;
   private tileMap = new Map<number, Tile>();
   private zone = 0;
+  private imgZone = 0;
+  private outer = new Map<string, Tile>();
+  private hf: Heightfield;
 
   /** Hand-placed trees on top of those detected in the imagery (cemetery oaks). */
   constructor(
@@ -107,8 +125,9 @@ export class Trees {
     hf: Heightfield,
     private roads?: RoadIndex,
     private planted: PlantedTree[] = [],
-    private water?: { depthAt(x: number, z: number): number },
+    private water?: { depthAt(x: number, z: number): number; sample(x: number, z: number): { mask: number; depth: number } },
   ) {
+    this.hf = hf;
     const leafCol = Array.from({ length: SPECIES_COUNT }, () => new THREE.Color());
     const bark = BARK.map((h) => new THREE.Color(h));
     this.material = new THREE.ShaderMaterial({
@@ -148,6 +167,120 @@ export class Trees {
   }
 
   /**
+   * Trees for one tile outside the imagery zone, from land cover alone:
+   * orchard rows, riverbank cottonwoods and oaks, woodland, farmstead groves.
+   */
+  private growTile(ti: number, tj: number): Tile | null {
+    const hf = this.hf;
+    const x0 = ti * TILE, z0 = tj * TILE;
+    const out: number[] = [];
+    const add = (x: number, z: number, r: number, h: number, sp: number, seed: number) => {
+      const road = this.roads?.nearest(x, z, 12);
+      if (road && road.dist < road.halfWidth + 1.8) return;
+      if (this.water && this.water.depthAt(x, z) > 0.05) return;
+      out.push(x, hf.height(x, z) - 0.35, z, seed * 6.2831, r, h, sp, hash(seed * 17.3));
+    };
+    // Orchards on the same survey grid as inside the zone.
+    const half = this.imgZone / 2;
+    for (const key of Object.keys(ORCHARD)) {
+      const o = ORCHARD[Number(key)];
+      const xs = -half + o.spacing / 2 + Math.ceil((x0 + half - o.spacing / 2) / o.spacing) * o.spacing;
+      const zs = -half + o.row / 2 + Math.ceil((z0 + half - o.row / 2) / o.row) * o.row;
+      for (let z = zs; z < z0 + TILE; z += o.row)
+        for (let x = xs; x < x0 + TILE; x += o.spacing) {
+          if (hf.landcover(x, z) !== Number(key)) continue;
+          const seed = hash(x * 0.137 + z * 0.731);
+          if (seed < 0.03) continue;
+          add(x + (seed - 0.5) * 0.4, z, o.r * (0.85 + seed * 0.3), o.h * (0.9 + hash(seed * 7.7) * 0.2), o.sp, seed);
+        }
+    }
+    // Riparian forest on the banks, oak woodland, willows in the marsh.
+    for (let z = z0 + 4; z < z0 + TILE; z += 8)
+      for (let x = x0 + 4; x < x0 + TILE; x += 8) {
+        const seed = hash(x * 0.311 + z * 0.917);
+        const jx = x + (hash(seed * 3.1) - 0.5) * 7, jz = z + (hash(seed * 5.3) - 0.5) * 7;
+        const lc = hf.landcover(jx, jz);
+        let p = 0;
+        let sp: number = TREE.VALLEY_OAK;
+        if (this.water) {
+          const w = this.water.sample(jx, jz);
+          if (w.mask > 0.03 && w.depth < 0.05) (p = 0.6), (sp = seed < 0.55 ? TREE.COTTONWOOD : TREE.VALLEY_OAK);
+        }
+        if (lc === LC.WOODLAND) (p = Math.max(p, 0.3)), (sp = seed < 0.3 ? TREE.LIVE_OAK : TREE.VALLEY_OAK);
+        else if (lc === LC.WETLAND && p === 0) (p = 0.04), (sp = TREE.SHRUB);
+        if (hash(seed * 11.7) > p) continue;
+        const r = sp === TREE.SHRUB ? 1.4 + seed : 3.2 + seed * 3;
+        const h = sp === TREE.COTTONWOOD ? r * 2.4 + 4 : sp === TREE.SHRUB ? 2 + seed * 1.5 : r * 1.6 + 3.5;
+        add(jx, jz, r, h, sp, seed);
+      }
+    // Farmstead groves, matching the terrain shader's section grid.
+    const SEC = 402.3;
+    for (let cj = Math.floor(z0 / SEC); cj <= Math.floor((z0 + TILE) / SEC); cj++)
+      for (let ci = Math.floor(x0 / SEC); ci <= Math.floor((x0 + TILE) / SEC); ci++) {
+        if (hash12(ci + 41, cj + 41) >= 0.14) continue;
+        const fx = hash12(ci + 43, cj + 43) < 0.5 ? 0.06 : 0.94;
+        const fz = hash12(ci + 47, cj + 47) < 0.5 ? 0.06 : 0.94;
+        const gx = (ci + fx) * SEC, gz = (cj + fz) * SEC;
+        const lc = hf.landcover(gx, gz);
+        if (lc === LC.WATER || lc === LC.WETLAND || (lc >= LC.URBAN_LOW && lc <= LC.URBAN_HIGH) || hf.height(gx, gz) > 90) continue;
+        for (let k = 0; k < 34; k++) {
+          const seed = hash(ci * 7.31 + cj * 3.17 + k * 0.619);
+          const a = seed * 6.2832 * 7, d = 12 + hash(seed * 9.1) * 30;
+          const x = gx + Math.cos(a) * d, z = gz + Math.sin(a) * d;
+          if (x < x0 || x >= x0 + TILE || z < z0 || z >= z0 + TILE) continue;
+          const sp = seed < 0.5 ? TREE.VALLEY_OAK : seed < 0.75 ? TREE.WALNUT : TREE.LIVE_OAK;
+          const r = 3 + hash(seed * 4.4) * 3.5;
+          add(x, z, r, sp === TREE.LIVE_OAK ? r * 1.2 + 3 : r * 1.6 + 4, sp, seed);
+        }
+      }
+    if (!out.length) return null;
+    let minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < out.length; i += 8) {
+      minY = Math.min(minY, out[i + 1]);
+      maxY = Math.max(maxY, out[i + 1] + out[i + 5]);
+    }
+    return { data: new Float32Array(out), count: out.length / 8, cx: x0 + TILE / 2, cz: z0 + TILE / 2, minY, maxY };
+  }
+
+  /** Grows outer tiles near the camera (a few per call) and drops far ones. Returns true if anything changed. */
+  private growOuter(cx: number, cz: number): boolean {
+    let changed = false;
+    const zh = this.zone / 2;
+    for (const [key, t] of this.outer) {
+      if (Math.hypot(t.cx - cx, t.cz - cz) > OUTER_DROP) {
+        this.outer.delete(key);
+        if (t.count) this.tiles.splice(this.tiles.indexOf(t), 1);
+        changed = true;
+      }
+    }
+    const want: [number, number, number][] = [];
+    const n = Math.ceil(OUTER_R / TILE);
+    const ci = Math.floor(cx / TILE), cj = Math.floor(cz / TILE);
+    for (let tj = cj - n; tj <= cj + n; tj++)
+      for (let ti = ci - n; ti <= ci + n; ti++) {
+        const x = (ti + 0.5) * TILE, z = (tj + 0.5) * TILE;
+        if (Math.abs(x) < zh && Math.abs(z) < zh) continue;
+        if (Math.abs(x) > LC_HALF || Math.abs(z) > LC_HALF) continue;
+        const d = Math.hypot(x - cx, z - cz);
+        if (d > OUTER_R || this.outer.has(ti + ',' + tj)) continue;
+        want.push([d, ti, tj]);
+      }
+    want.sort((a, b) => a[0] - b[0]);
+    const t0 = performance.now();
+    for (const [, ti, tj] of want) {
+      if (performance.now() - t0 > 6) break;
+      const t = this.growTile(ti, tj);
+      const empty: Tile = { data: new Float32Array(0), count: 0, cx: (ti + 0.5) * TILE, cz: (tj + 0.5) * TILE, minY: 0, maxY: 0 };
+      this.outer.set(ti + ',' + tj, t ?? empty);
+      if (t) {
+        this.tiles.push(t);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /**
    * Deepest trunk overlapping a circle at (x, z), as a push-out direction and
    * depth. Shrubs are ignored (the truck rolls over them).
    */
@@ -162,24 +295,34 @@ export class Trees {
       for (let ti = i0; ti <= i1; ti++) {
         if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) continue;
         const t = this.tileMap.get(tj * tilesN + ti);
-        if (!t) continue;
-        const d = t.data;
-        for (let k = 0; k < t.count; k++) {
-          const o = k * 8;
-          const dx = x - d[o], dz = z - d[o + 2];
-          if (Math.abs(dx) > reach || Math.abs(dz) > reach) continue;
-          const sp = d[o + 6];
-          if (sp === TREE.SHRUB) continue;
-          const trunk = sp >= TREE.ALMOND ? 0.2 : Math.min(0.7, Math.max(0.25, d[o + 4] * 0.08));
-          const dist = Math.hypot(dx, dz);
-          const depth = radius + trunk - dist;
-          if (depth > 0 && (!best || depth > best.depth)) {
-            const l = dist || 1;
-            best = { nx: dx / l, nz: dz / l, depth };
-          }
-        }
+        if (t) check(t);
+      }
+    const g0 = Math.floor((x - reach) / TILE), g1 = Math.floor((x + reach) / TILE);
+    const h0 = Math.floor((z - reach) / TILE), h1 = Math.floor((z + reach) / TILE);
+    for (let tj = h0; tj <= h1; tj++)
+      for (let ti = g0; ti <= g1; ti++) {
+        const t = this.outer.get(ti + ',' + tj);
+        if (t) check(t);
       }
     return best;
+
+    function check(t: Tile) {
+      const d = t.data;
+      for (let k = 0; k < t.count; k++) {
+        const o = k * 8;
+        const dx = x - d[o], dz = z - d[o + 2];
+        if (Math.abs(dx) > reach || Math.abs(dz) > reach) continue;
+        const sp = d[o + 6];
+        if (sp === TREE.SHRUB) continue;
+        const trunk = sp >= TREE.ALMOND ? 0.2 : Math.min(0.7, Math.max(0.25, d[o + 4] * 0.08));
+        const dist = Math.hypot(dx, dz);
+        const depth = radius + trunk - dist;
+        if (depth > 0 && (!best || depth > best.depth)) {
+          const l = dist || 1;
+          best = { nx: dx / l, nz: dz / l, depth };
+        }
+      }
+    }
   }
 
   /** Registers the near tree LODs as shadow casters. */
@@ -202,6 +345,7 @@ export class Trees {
     for (const t of this.planted) grid = Math.max(grid, 2 * Math.max(Math.abs(t.x), Math.abs(t.z)) + 2 * TILE);
     grid = Math.ceil(grid / (2 * TILE)) * 2 * TILE;
     this.zone = grid;
+    this.imgZone = zone;
     const v = new DataView(buf);
     const n = buf.byteLength / 6;
     const tilesN = Math.ceil(grid / TILE);
@@ -352,9 +496,10 @@ export class Trees {
   }
 
   update(camera: THREE.PerspectiveCamera) {
+    const grew = this.growOuter(camera.position.x, camera.position.z);
     const moved = camera.position.distanceTo(this.lastPos);
     const turned = 1 - Math.abs(camera.quaternion.dot(this.lastQuat));
-    if (moved < 25 && turned < 0.002) return;
+    if (moved < 25 && turned < 0.002 && !grew) return;
     this.lastPos.copy(camera.position);
     this.lastQuat.copy(camera.quaternion);
     this.projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
