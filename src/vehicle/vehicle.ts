@@ -30,8 +30,9 @@ export class Vehicle {
     this.physics.step(dt, inp);
   }
 
-  headlightsWanted(night: number, fog: number) {
-    return this.headlights ?? (night > 0.25 || fog > 0.3);
+  /** Auto headlights: at night, and in fog, rain or snow (wipers on, lights on). */
+  headlightsWanted(night: number, murky: boolean) {
+    return this.headlights ?? (night > 0.25 || murky);
   }
 
   sync(dt: number, night: number, wanted: boolean) {
