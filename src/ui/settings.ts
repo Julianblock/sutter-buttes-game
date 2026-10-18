@@ -18,6 +18,7 @@ export interface GameSettings {
   timeFlow: number;
   invertPitch: boolean;
   units: 'imperial' | 'metric';
+  truck: string;
 }
 
 const KEY = 'sutter-buttes-settings-v1';
@@ -33,6 +34,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   timeFlow: 0,
   invertPitch: false,
   units: 'imperial',
+  truck: 'cherry',
 };
 
 export function loadSettings(params: URLSearchParams): GameSettings {

@@ -1,12 +1,14 @@
 import { SPECIES, speciesById, type Palette } from '../birds/species';
 import { MOONS, SEASONS, TIMES, WEATHERS } from '../world/environment';
+import { PAINTS } from '../vehicle/carModel';
 import type { GameSettings } from './settings';
 
-type Tab = 'bird' | 'plumage' | 'season' | 'time' | 'sky';
+type Tab = 'bird' | 'plumage' | 'truck' | 'season' | 'time' | 'sky';
 
 const TABS: [Tab, string][] = [
   ['bird', 'Bird'],
   ['plumage', 'Plumage'],
+  ['truck', 'Truck'],
   ['season', 'Season'],
   ['time', 'Time'],
   ['sky', 'Sky'],
@@ -39,6 +41,7 @@ export class Menu {
   visible = true;
   onChange: (s: GameSettings, what: keyof GameSettings) => void = () => {};
   onFly: () => void = () => {};
+  onDrive: () => void = () => {};
 
   constructor(private s: GameSettings) {
     const panel = el('div', 'panel');
@@ -65,7 +68,9 @@ export class Menu {
     const foot = el('div', 'foot');
     const fly = el('button', 'cta', 'Take Flight');
     fly.onclick = () => this.onFly();
-    foot.append(fly, el('div', 'hint', '<kbd>Esc</kbd> returns here in flight<br><kbd>H</kbd> shows the controls'));
+    const drive = el('button', 'cta alt', 'Drive');
+    drive.onclick = () => this.onDrive();
+    foot.append(fly, drive, el('div', 'hint', '<kbd>Esc</kbd> returns here · <kbd>G</kbd> swaps<br>bird and truck · <kbd>H</kbd> controls'));
     panel.append(foot);
     this.root.append(panel);
     this.render();
@@ -94,6 +99,21 @@ export class Menu {
       case 'plumage':
         this.renderPlumage();
         break;
+      case 'truck': {
+        this.pane.append(el('div', 'section-label', 'Paint'));
+        const grid = el('div', 'grid');
+        for (const p of PAINTS) {
+          const hex = '#' + p.hex.toString(16).padStart(6, '0');
+          const c = el('button', `card${p.id === this.s.truck ? ' on' : ''}`, `<b><i class="paint" style="background:${hex}"></i>${p.name}</b>`);
+          c.onclick = () => this.set('truck', p.id);
+          grid.append(c);
+        }
+        this.pane.append(grid);
+        this.pane.append(
+          el('p', 'lede', 'A well-worn ranch pickup. Pass Road and West Butte Road wind through the range; press <kbd>G</kbd> any time to swap between wings and wheels.'),
+        );
+        break;
+      }
       case 'season':
         this.renderChoice(
           Object.entries(SEASONS).map(([id, v]) => [id, v.label, v.blurb]),
