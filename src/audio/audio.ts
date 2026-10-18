@@ -77,6 +77,11 @@ export class SoundScape {
   private rainHissFilter!: BiquadFilterNode;
   private rainPatter!: GainNode;
   private roofDrum!: GainNode;
+  private muffle!: BiquadFilterNode;
+  private bubbleGain!: GainNode;
+  private ghostGain!: GainNode;
+  private ghostFilter!: BiquadFilterNode;
+  private rumbleGain!: GainNode;
   private dripT = 0;
   private lastSin = 0;
   private timers = { lark: 4, cricket: 0, frog: 0, honk: 0, moo: 8, coyote: 30, blackbird: 6 };
@@ -97,7 +102,11 @@ export class SoundScape {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
     comp.ratio.value = 3;
-    this.master.connect(comp).connect(ctx.destination);
+    // Everything passes a low-pass that closes when the camera goes under water.
+    this.muffle = ctx.createBiquadFilter();
+    this.muffle.type = 'lowpass';
+    this.muffle.frequency.value = 20000;
+    this.master.connect(this.muffle).connect(comp).connect(ctx.destination);
     this.ambience = ctx.createGain();
     this.ambience.connect(this.master);
 
@@ -212,6 +221,46 @@ export class SoundScape {
     this.roofDrum.gain.value = 0;
     loop().connect(rf).connect(this.roofDrum).connect(this.master);
 
+    // Under water: a dull, close rumble of current and bubbles.
+    const bub = ctx.createBiquadFilter();
+    bub.type = 'lowpass';
+    bub.frequency.value = 260;
+    bub.Q.value = 3;
+    this.bubbleGain = ctx.createGain();
+    this.bubbleGain.gain.value = 0;
+    loop().connect(bub).connect(this.bubbleGain).connect(comp);
+    // Ghosts: breathy, wandering formants over a low moan.
+    this.ghostFilter = ctx.createBiquadFilter();
+    this.ghostFilter.type = 'bandpass';
+    this.ghostFilter.frequency.value = 900;
+    this.ghostFilter.Q.value = 7;
+    this.ghostGain = ctx.createGain();
+    this.ghostGain.gain.value = 0;
+    loop().connect(this.ghostFilter).connect(this.ghostGain).connect(this.master);
+    for (const f of [146.8, 148.1, 220.4]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f;
+      const vib = ctx.createOscillator();
+      vib.frequency.value = 0.13 + Math.random() * 0.1;
+      const vg = ctx.createGain();
+      vg.gain.value = f * 0.04;
+      vib.connect(vg).connect(o.frequency);
+      const og = ctx.createGain();
+      og.gain.value = 0.12;
+      o.connect(og).connect(this.ghostGain);
+      o.start();
+      vib.start();
+    }
+    // Deep volcanic rumble.
+    const rb = ctx.createBiquadFilter();
+    rb.type = 'lowpass';
+    rb.frequency.value = 75;
+    rb.Q.value = 1.2;
+    this.rumbleGain = ctx.createGain();
+    this.rumbleGain.gain.value = 0;
+    loop().connect(rb).connect(this.rumbleGain).connect(this.master);
+
     for (let i = 0; i < 7; i++) this.crickets.push({ rate: rand(0.9, 1.1), pan: rand(-1, 1), next: rand(0, 1) });
   }
 
@@ -237,6 +286,19 @@ export class SoundScape {
       const ti = t + 0.1 + i * len * 0.17 + rand(0, 0.3);
       this.noiseBurst(ti, len * rand(0.35, 0.6), cutoff * rand(0.7, 1.3), 0.7, loud * rand(0.35, 0.7), out, 'lowpass');
     }
+  }
+
+  /** Special ambience levels 0..1: under water, haunted, erupting. */
+  setFx(underwater: number, ghost: number, rumble: number) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const on = this.muted ? 0 : 1;
+    this.muffle.frequency.setTargetAtTime(underwater > 0.5 ? 420 : 20000, t, 0.08);
+    this.bubbleGain.gain.setTargetAtTime(underwater * 0.5 * on, t, 0.15);
+    this.ghostGain.gain.setTargetAtTime(ghost * 0.22 * (0.6 + 0.4 * Math.sin(t * 0.7)), t, 0.4);
+    this.ghostFilter.frequency.setTargetAtTime(700 + 600 * (0.5 + 0.5 * Math.sin(t * 0.9 + Math.sin(t * 0.31) * 3)), t, 0.3);
+    this.rumbleGain.gain.setTargetAtTime(rumble * 1.4 * on, t, 0.5);
   }
 
   setMuted(m: boolean) {
