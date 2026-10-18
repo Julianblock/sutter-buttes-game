@@ -32,6 +32,9 @@ export const G = {
   uShadowOn: { value: 0 },
   uTerrainShadow: { value: null as THREE.Texture | null },
   uTerrainShadowSize: { value: 22000 },
+  uHeadPos: { value: new THREE.Vector3() }, // player truck headlights
+  uHeadDir: { value: new THREE.Vector3(1, 0, 0) },
+  uHeadOn: { value: 0 },
 };
 
 export type GlobalUniforms = typeof G;

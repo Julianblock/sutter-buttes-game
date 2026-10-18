@@ -30,6 +30,9 @@ uniform mat4 uShadowMatrix;
 uniform float uShadowOn;
 uniform sampler2D uTerrainShadow;
 uniform float uTerrainShadowSize;
+uniform vec3 uHeadPos;
+uniform vec3 uHeadDir;
+uniform float uHeadOn;
 
 const float CLOUD_BASE = 1800.0;
 
@@ -192,6 +195,26 @@ vec3 applyAtmosphere(vec3 color, vec3 wp) {
   return color;
 }
 
+/** Player truck low beams: wide, sharp cutoff just above the horizon. */
+vec3 headlight(vec3 albedo, vec3 n, vec3 wp) {
+  if (uHeadOn <= 0.0) return vec3(0.0);
+  vec3 d = wp - uHeadPos;
+  float dist = length(d);
+  if (dist > 140.0) return vec3(0.0);
+  vec3 l = d / dist;
+  vec3 right = normalize(cross(uHeadDir, vec3(0.0, 1.0, 0.0)));
+  vec3 up = cross(right, uHeadDir);
+  float fwd = dot(l, uHeadDir);
+  float h = dot(l, right) / max(fwd, 0.05);
+  float v = dot(l, up) / max(fwd, 0.05);
+  float beam = exp(-h * h * 3.2) * smoothstep(0.035, -0.01, v) * smoothstep(-1.2, -0.1, v);
+  beam += exp(-h * h * 40.0 - v * v * 300.0) * 1.5; // hot spot
+  beam *= smoothstep(0.1, 0.5, fwd);
+  float ndl = max(dot(n, -l), 0.0);
+  float att = smoothstep(0.8, 2.5, dist) / (dist * dist + 4.0);
+  return albedo / PI * vec3(1.0, 0.93, 0.8) * 2400.0 * uInvExposure * beam * att * ndl * uHeadOn * smoothstep(140.0, 60.0, dist);
+}
+
 /** Shared diffuse + specular shading for opaque surfaces. */
 vec3 shadeSurface(vec3 albedo, vec3 n, vec3 wp, float ao, float rough, float shadow) {
   vec3 V = normalize(uCamPos - wp);
@@ -208,7 +231,7 @@ vec3 shadeSurface(vec3 albedo, vec3 n, vec3 wp, float ao, float rough, float sha
   float F = 0.04 + 0.96 * pow(1.0 - max(dot(H, V), 0.0), 5.0);
   float spec = D * F * 0.25;
   vec3 direct = (albedo / PI + spec) * sun * ndl * shadow + albedo / PI * moon * ndlM * shadow;
-  return direct + albedo * skyAmbient(n, ao) / PI;
+  return direct + albedo * skyAmbient(n, ao) / PI + headlight(albedo, n, wp);
 }
 
 #endif

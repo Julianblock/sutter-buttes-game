@@ -220,7 +220,7 @@ void main() {
   float ndlM = clamp((dot(n, uMoonDir) + wrap) / (1.0 + wrap), 0.0, 1.0);
   float ao = vAO;
   vec3 col = albedo / PI * (sun * ndl * shadow + moon * ndlM * shadow) * mix(1.0, ao, 0.6);
-  col += albedo * skyAmbient(n, ao) / PI;
+  col += albedo * skyAmbient(n, ao) / PI + headlight(albedo, n, vWorld);
   // Light filtering through backlit leaves.
   float back = pow(max(dot(-V, uSunDir), 0.0), 4.0);
   col += albedo * albedo * 2.2 * sun * shadow * back * thin * 0.35 * ao;
