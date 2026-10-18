@@ -23,6 +23,8 @@ export const waterCommon = /* glsl */ `
 uniform sampler2D uWaterTex;
 uniform float uWaterSize;
 uniform float uUnderwater;
+uniform float uVision;
+uniform vec3 uVolcano;
 uniform float uCamWaterY;
 
 /** x: water surface height (m), y: channel mask (0 on dry land). */
@@ -286,6 +288,11 @@ vec3 applyAtmosphere(vec3 color, vec3 wp) {
   vec2 wl = waterAt(wp.xz);
   if (wl.y > 0.01 && wp.y < wl.x - 0.02) color *= exp(-WATER_SIGMA * (wl.x - wp.y) * 1.2);
   if (uUnderwater > 0.5) return underwaterFog(color, wp);
+  if (uVision > 0.0) {
+    // The vision: fresh lava rock and falling ash darken the volcanic core.
+    float core = smoothstep(uVolcano.z, uVolcano.z * 0.45, length(wp.xz - uVolcano.xy)) * uVision;
+    color *= mix(vec3(1.0), vec3(0.32, 0.27, 0.25), core);
+  }
   vec3 v = wp - uCamPos;
   float d = length(v);
   vec3 dir = v / max(d, 1e-3);

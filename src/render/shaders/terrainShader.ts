@@ -41,8 +41,6 @@ uniform sampler2D uImgFar;
 uniform sampler2D uMaskA;
 uniform sampler2D uMaskB;
 uniform float uLcSize;
-uniform float uVision;
-uniform vec3 uVolcano;
 uniform vec4 uVeg;      // grass green, oak leaf-out, wildflowers, wetland flooding
 uniform vec4 uRice;     // flooded, sprouting, mature green, golden/harvested
 uniform vec4 uOrchard;  // bare, almond blossom, fruit blossom, autumn colour
@@ -235,13 +233,12 @@ void main() {
     // The core 1.6 million years ago: fresh black lava, ash-dark slopes and
     // incandescent flows threading down from the domes.
     float core = smoothstep(uVolcano.z, uVolcano.z * 0.45, length(xz - uVolcano.xy)) * uVision;
-    color *= 1.0 - core * 0.7;
     vec2 wq = xz / 260.0 + vec2(fbm(xz / 900.0, 3), fbm(xz / 900.0 + 9.0, 3)) * 2.2;
-    float vein = 1.0 - smoothstep(0.0, 0.045, abs(fbm(wq, 4) - 0.5));
-    float high = smoothstep(120.0, 480.0, vWorld.y);
+    float high = smoothstep(260.0, 560.0, vWorld.y);
+    float vein = (1.0 - smoothstep(0.0, 0.018 + 0.03 * high, abs(fbm(wq, 4) - 0.5))) * high;
     float pulse = 0.75 + 0.25 * sin(uTime * 1.7 + fbm(xz / 80.0, 2) * 9.0);
     vec3 lava = mix(vec3(1.0, 0.16, 0.02), vec3(1.0, 0.55, 0.15), vein * high);
-    color += lava * vein * (0.2 + high) * pulse * core * 6.0 * uInvExposure;
+    color += lava * vein * pulse * core * 5.0 * uInvExposure;
   }
 
   color = applyAtmosphere(color, vWorld);
