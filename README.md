@@ -56,6 +56,8 @@ Driving:
 | L | Headlights |
 | V | Horn |
 
+On phones and tablets, on-screen controls replace the keyboard. A floating thumb-stick on the left pitches and banks the bird, or steers the truck (push it up for gas, down to brake). Buttons on the right flap, dive, flare, sprint and call, or work the gas, brake, handbrake, horn and lights. Drag the view to look around and pinch to zoom. Buttons along the top open the menu, change the camera, swap between bird and truck, and show help. The game goes full screen in landscape where the browser allows it, and you can add it to your home screen as an app. Mobile uses lighter rendering automatically; add `?hq` to the URL for full quality, or `?touch` to try the touch controls on a desktop.
+
 ## Development
 
 ```sh
