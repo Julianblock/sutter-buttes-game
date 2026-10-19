@@ -126,6 +126,10 @@
   margin-bottom: -1px;
   transition: color 0.2s, border-color 0.2s;
 }
+.menu.wide .tabs button {
+  font-size: 13px;
+  padding: 13px 14px 14px;
+}
 .tabs button:hover {
   color: var(--ink);
 }
@@ -176,6 +180,38 @@
 }
 .card.wide {
   grid-column: span 2;
+}
+.menu.wide .panel {
+  width: min(820px, 100vw);
+  background: linear-gradient(90deg, rgba(10, 10, 11, 0.88) 0%, rgba(10, 10, 11, 0.78) 80%, rgba(10, 10, 11, 0) 100%);
+}
+.menu .places-lede {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.places-label {
+  font-size: 13px;
+  margin: 18px 0 10px;
+}
+.grid.places {
+  gap: 12px;
+}
+.card.place-card {
+  padding: 18px 20px;
+  min-height: 76px;
+  border-radius: 12px;
+}
+.card.place-card b {
+  font-size: 19px;
+  font-weight: 600;
+}
+.card.place-card small {
+  margin-top: 8px;
+  font: 400 15.5px/1.45 var(--sans);
+  color: rgba(255, 255, 255, 0.72);
+}
+.card.place-card.on b {
+  color: var(--accent);
 }
 .detail {
   margin-top: 18px;

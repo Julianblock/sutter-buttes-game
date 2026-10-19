@@ -347,7 +347,7 @@ async function boot() {
       car.place(x, z, s.psi);
       driveCam.reset();
     } else {
-      player.flight.spawn(x, heightfield.height(x, z) + 45, z, s.psi);
+      player.flight.spawn(x, heightfield.height(x, z) + (s.alt ?? 45), z, s.psi);
       chase.snapFrom(cam, player.object.position);
     }
   };

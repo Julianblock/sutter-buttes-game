@@ -6,29 +6,70 @@ export interface Destination {
   id: string;
   label: string;
   blurb: string;
+  group: 'Towns' | 'Marysville' | 'The Buttes';
 }
 
+/** Valley towns: start over the town centre as mapped in OSM `place` nodes. */
+const TOWNS: Record<string, string> = {
+  'Yuba City': 'yubacity',
+  Colusa: 'colusa',
+  'Live Oak': 'liveoak',
+  Gridley: 'gridley',
+  Sutter: 'sutter',
+  Biggs: 'biggs',
+  Princeton: 'princeton',
+  Olivehurst: 'olivehurst',
+  'Plumas Lake': 'plumaslake',
+};
+
 export const DESTINATIONS: Destination[] = [
-  { id: 'pass', label: 'Pass Road', blurb: 'The county road over the saddle through the middle of the range.' },
-  { id: 'northbutte', label: 'North Butte Road', blurb: 'Skirts the north foot of the Buttes past orchards, ranch gates and the old cemeteries.' },
+  { group: 'Towns', id: 'yubacity', label: 'Yuba City', blurb: 'Sutter County seat across the Feather from Marysville, ringed by peach and prune orchards.' },
+  { group: 'Towns', id: 'colusa', label: 'Colusa', blurb: 'Colusa County seat on the Sacramento River, west of the Buttes. Snow geese fill the refuges in winter.' },
+  { group: 'Towns', id: 'liveoak', label: 'Live Oak', blurb: 'Small farm town on Highway 99 between Yuba City and Gridley.' },
+  { group: 'Towns', id: 'gridley', label: 'Gridley', blurb: 'Butte County orchard town north of the Buttes, known for its kiwifruit.' },
+  { group: 'Towns', id: 'sutter', label: 'Sutter', blurb: 'The village at the south foot of the Buttes, where Pass Road begins.' },
+  { group: 'Towns', id: 'biggs', label: 'Biggs', blurb: 'Rice country, home of the California Rice Experiment Station.' },
+  { group: 'Towns', id: 'princeton', label: 'Princeton', blurb: 'Sacramento River village north of Colusa.' },
+  { group: 'Towns', id: 'olivehurst', label: 'Olivehurst', blurb: 'Yuba County town south of Marysville along Highway 70.' },
+  { group: 'Towns', id: 'plumaslake', label: 'Plumas Lake', blurb: 'New neighbourhoods on the old Feather River farmland south of Olivehurst.' },
   {
-    id: 'cemetery',
-    label: 'North Butte Cemetery',
-    blurb: 'The "witches\' cemetery": a pioneer burial ground at the end of a long dirt lane. Closed sunset to sunrise.',
-  },
-  { id: 'track', label: 'Ranch track to North Butte', blurb: 'Private dirt tracks climbing the oak slopes toward North Butte itself.' },
-  { id: 'westbutte', label: 'West Butte Road', blurb: 'Gravel-edged county road around the west side, past Noyesburg Cemetery.' },
-  {
+    group: 'Marysville',
     id: 'marysville',
     label: 'Downtown Marysville',
     blurb: 'D Street through the Gold Rush brick blocks of the old river port, busiest after dark.',
   },
   {
+    group: 'Marysville',
     id: 'bridge',
     label: 'Twin Cities Memorial Bridge',
     blurb: 'The Fifth Street crossing of the Feather River from Yuba City, beside the 1907 Northern Electric truss bridge.',
   },
-  { id: 'stjoseph', label: 'St. Joseph Church', blurb: 'The 1855 cathedral on C Street, its white steeple 100 feet over Marysville.' },
+  { group: 'Marysville', id: 'stjoseph', label: 'St. Joseph Church', blurb: 'The 1855 cathedral on C Street, its white steeple 100 feet over Marysville.' },
+  { group: 'The Buttes', id: 'pass', label: 'Pass Road', blurb: 'The county road over the saddle through the middle of the range.' },
+  {
+    group: 'The Buttes',
+    id: 'northbutte',
+    label: 'North Butte Road',
+    blurb: 'Skirts the north foot of the Buttes past orchards, ranch gates and the old cemeteries.',
+  },
+  {
+    group: 'The Buttes',
+    id: 'cemetery',
+    label: 'North Butte Cemetery',
+    blurb: 'The "witches\' cemetery": a pioneer burial ground at the end of a long dirt lane. Closed sunset to sunrise.',
+  },
+  {
+    group: 'The Buttes',
+    id: 'track',
+    label: 'Ranch track to North Butte',
+    blurb: 'Private dirt tracks climbing the oak slopes toward North Butte itself.',
+  },
+  {
+    group: 'The Buttes',
+    id: 'westbutte',
+    label: 'West Butte Road',
+    blurb: 'Gravel-edged county road around the west side, past Noyesburg Cemetery.',
+  },
 ];
 
 const NORTH_BUTTE: [number, number] = [2467, -3392];
@@ -48,6 +89,8 @@ export interface Spot {
   psi: number;
   /** On a two-way road: keep right of the centreline. */
   road: boolean;
+  /** Bird start height above the ground (m). */
+  alt?: number;
 }
 
 /** Point on the matching roads closest to (ax, az), with the segment heading. */
@@ -82,6 +125,14 @@ export function resolveDestination(id: string, osm: OsmData, cemeteries: Cemeter
     const s = nearestOn(osm, (n) => n === 'C Street', l.x, l.z);
     if (!s) return null;
     return { x: s.x, z: s.z, psi: Math.atan2(l.x - s.x, l.z - s.z), road: false };
+  }
+  const townName = Object.keys(TOWNS).find((n) => TOWNS[n] === id);
+  if (townName) {
+    // On the main street nearest the town centre, high enough to take it in.
+    const p = osm.places.find((q) => q.name === townName);
+    if (!p) return null;
+    const s = nearestOn(osm, (n, k) => !!n && k !== 'track' && k !== 'service', p.x, p.z);
+    return s && { x: s.x, z: s.z, psi: Math.atan2(s.dx, s.dz), road: true, alt: 120 };
   }
   const anchor = ROAD_ANCHORS[id];
   if (anchor) {
