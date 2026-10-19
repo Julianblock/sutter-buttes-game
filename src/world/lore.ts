@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import type { Discoveries, Discovery } from '../ui/discoveries';
 import type { CemeteryPlan } from './cemetery';
 import type { Heightfield } from './heightfield';
+import type { Town } from './town';
 import type { VolcanoVision } from './volcano';
 import type { WaterKind } from './water';
 
@@ -30,6 +31,56 @@ const PEAKS = {
   west: { x: -2802, z: -1399 },
 };
 
+function townSpots(town: Town): Spot[] {
+  const near = (id: string, r: number, agl: number) => {
+    const l = town.landmark(id);
+    return (s: LoreState) => !!l && Math.hypot(s.pos.x - l.x, s.pos.z - l.z) < r && s.agl < agl;
+  };
+  const downtown = (s: LoreState) => town.inCore(s.pos.x, s.pos.z);
+  return [
+    {
+      id: 'marysville',
+      kind: 'lore',
+      kicker: 'Marysville · laid out 1850',
+      title: 'The river port of the northern mines',
+      text: 'Where the Yuba meets the Feather, steamboats from Sacramento unloaded for the gold camps of the Sierra, and Marysville became one of the largest towns in California. It is named for Mary Murphy Covillaud, a survivor of the Donner Party. Mining debris later raised the riverbeds, and the town has lived inside a ring of levees ever since.',
+      test: (s) => downtown(s) && s.agl < 150,
+    },
+    {
+      id: 'stjoseph',
+      kind: 'lore',
+      kicker: 'St. Joseph Church · 1855',
+      title: 'A cathedral for half the West',
+      text: 'The cornerstone was laid in September 1855. From 1860 St. Joseph’s was the cathedral of a vicariate reaching from the 39th parallel to Oregon and east to the Rockies. The stained glass came from the Zettler studio in Munich in 1899.',
+      test: near('stjoseph', 70, 120),
+    },
+    {
+      id: 'bokkai',
+      kind: 'lore',
+      kicker: 'Bok Kai Temple · 1880',
+      title: 'The god who holds back the water',
+      text: 'Built by Marysville’s Chinese community on the levee at the foot of D Street, the temple honours Bok Eye, the Taoist god of water, who keeps floods away. Every spring the Bok Kai Festival fills the streets with lion dancers, a dragon and firecrackers.',
+      test: near('bokkai', 60, 100),
+    },
+    {
+      id: 'twincities',
+      kind: 'lore',
+      kicker: 'Feather River · Fifth Street',
+      title: 'Twin Cities',
+      text: 'The concrete Fifth Street bridge between Yuba City and Marysville opened in 2019. Beside it stand the steel Pratt trusses built in 1906–07 for the Northern Electric interurban, which ran from Sacramento to Chico.',
+      test: near('twincities', 160, 120),
+    },
+    {
+      id: 'saturday-night',
+      kind: 'secret',
+      kicker: 'Downtown Marysville · after dark',
+      title: 'Saturday night on D Street',
+      text: 'Shopfronts lit, neon humming, the sidewalks full. Someone in Yuba City swears Marysville is the New York of the West.',
+      test: (s) => downtown(s) && s.night > 0.6 && s.agl < 60,
+    },
+  ];
+}
+
 /**
  * Places and moments around the Buttes that tell a bit of their story when
  * you find them, plus the volcano vision from the top of North Butte.
@@ -44,6 +95,7 @@ export class Lore {
     private journal: Discoveries,
     private volcano: VolcanoVision,
     witches: CemeteryPlan | undefined,
+    town?: Town | null,
   ) {
     const summit = (p: { x: number; z: number }) => {
       const h = hf.height(p.x, p.z);
@@ -150,6 +202,7 @@ export class Lore {
         test: (s) => s.snowCover > 0.3 && fromButtes(s) < 6000 && s.pos.y > 250,
       },
     ];
+    if (town) this.spots.push(...townSpots(town));
     this.ids = this.spots.map((s) => s.id);
   }
 

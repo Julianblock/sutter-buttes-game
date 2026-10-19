@@ -381,7 +381,7 @@ export class Traffic {
       const dx = c.x - camPos.x;
       const dz = c.z - camPos.z;
       const d2 = dx * dx + dz * dz;
-      if (d2 < 8000 * 8000 || c.y === 0) c.y = this.hf.height(c.x, c.z) + 0.2;
+      if (d2 < 8000 * 8000 || c.y === 0) c.y = this.hf.roadHeight(c.x, c.z, ux, uz) + 0.2;
       const ang = Math.atan2(uz, ux);
       this.t0[c.type].set([c.x, c.y, c.z, ang], c.slot * 4);
 

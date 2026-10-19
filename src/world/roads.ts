@@ -98,7 +98,7 @@ export class Roads {
         for (const s of [-1, 1]) {
           const vx = x - tz * w * s;
           const vz = z + tx * w * s;
-          b.pos.push(vx, hf.height(vx, vz) + 0.15, vz);
+          b.pos.push(vx, hf.roadHeight(vx, vz, tx, tz) + 0.15, vz);
           b.road.push(s, along);
           b.info.push(half, style, rank, nrm.x);
           b.nz.push(nrm.z);

@@ -96,7 +96,8 @@ export class Props {
   readonly lights: number[] = [];
   private batches: Batch[] = [];
 
-  constructor(osm: OsmData, hf: Heightfield, pylons: Pylon[] = []) {
+  /** `skip` marks ground a detailed town draws itself (its buildings and infill stand down). */
+  constructor(osm: OsmData, hf: Heightfield, pylons: Pylon[] = [], skip: (x: number, z: number) => boolean = () => false) {
     this.material = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
       vertexShader: propVertex,
@@ -138,7 +139,7 @@ export class Props {
     osm.buildings.forEach(([x, z, w, d, ang], i) => {
       const s = hash(i + x * 0.01);
       const area = w * d;
-      if (area < 12 || w > 400 || d > 400) return;
+      if (area < 12 || w > 400 || d > 400 || skip(x, z)) return;
       const lc = hf.landcover(x, z);
       const urban = lc >= LC.URBAN_LOW && lc <= LC.URBAN_HIGH;
       const ratio = Math.max(w, d) / Math.max(1, Math.min(w, d));
@@ -202,7 +203,7 @@ export class Props {
             const hx = cx - uz * off * side;
             const hz = cz + ux * off * side;
             const kk = key(hx, hz);
-            if (occ.has(kk) || !isUrban(hx, hz)) continue;
+            if (occ.has(kk) || !isUrban(hx, hz) || skip(hx, hz)) continue;
             occ.add(kk);
             addHouse(hx, hz, 13 + s * 6, 10 + s * 4, ang, s, seed, true);
           }

@@ -14,6 +14,9 @@ export interface WorldTextures {
   /** R almond, G stone fruit, B urban, A wetland (seasonal flooding) */
   maskB: THREE.DataTexture;
   canopy: THREE.DataTexture;
+  /** Town orthophoto and its square: centre x, z and size (0 when absent). */
+  imgTown: THREE.Texture;
+  town: THREE.Vector3;
 }
 
 function heightTexture(g: HeightGrid): THREE.DataTexture {
@@ -77,7 +80,18 @@ export function createWorldTextures(world: WorldData, renderer: THREE.WebGLRende
   const canopy = new THREE.DataTexture(cd, world.canopy.width, world.canopy.height, THREE.RedFormat, THREE.UnsignedByteType);
   canopy.minFilter = canopy.magFilter = THREE.LinearFilter;
   canopy.needsUpdate = true;
+  let imgTown: THREE.Texture;
+  const town = new THREE.Vector3();
+  if (world.town && world.meta.town) {
+    imgTown = imageTexture(world.town.imagery, aniso);
+    town.set(world.meta.town.center[0], world.meta.town.center[1], world.meta.town.size);
+  } else {
+    imgTown = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+    imgTown.needsUpdate = true;
+  }
   return {
+    imgTown,
+    town,
     heightInner: heightTexture(world.heights.inner),
     heightMid: heightTexture(world.heights.mid),
     heightFar: heightTexture(world.heights.far),

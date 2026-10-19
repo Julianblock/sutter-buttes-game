@@ -1,5 +1,6 @@
 import type { CemeteryPlan } from './cemetery';
 import type { OsmData } from './meta';
+import type { Town } from './town';
 
 export interface Destination {
   id: string;
@@ -17,6 +18,17 @@ export const DESTINATIONS: Destination[] = [
   },
   { id: 'track', label: 'Ranch track to North Butte', blurb: 'Private dirt tracks climbing the oak slopes toward North Butte itself.' },
   { id: 'westbutte', label: 'West Butte Road', blurb: 'Gravel-edged county road around the west side, past Noyesburg Cemetery.' },
+  {
+    id: 'marysville',
+    label: 'Downtown Marysville',
+    blurb: 'D Street through the Gold Rush brick blocks of the old river port, busiest after dark.',
+  },
+  {
+    id: 'bridge',
+    label: 'Twin Cities Memorial Bridge',
+    blurb: 'The Fifth Street crossing of the Feather River from Yuba City, beside the 1907 Northern Electric truss bridge.',
+  },
+  { id: 'stjoseph', label: 'St. Joseph Church', blurb: 'The 1855 cathedral on C Street, its white steeple 100 feet over Marysville.' },
 ];
 
 const NORTH_BUTTE: [number, number] = [2467, -3392];
@@ -26,6 +38,8 @@ const ROAD_ANCHORS: Record<string, [string, number, number]> = {
   pass: ['Pass Road', -500, 2600],
   northbutte: ['North Butte Road', -2788, -9412],
   westbutte: ['West Butte Road', -6600, -3000],
+  marysville: ['D Street', 19540, 7380],
+  bridge: ['Twin Cities Memorial Bridge', 17990, 7350],
 };
 
 export interface Spot {
@@ -60,7 +74,15 @@ function nearestOn(osm: OsmData, match: (name: string, kind: string) => boolean,
   return spot;
 }
 
-export function resolveDestination(id: string, osm: OsmData, cemeteries: CemeteryPlan[]): Spot | null {
+export function resolveDestination(id: string, osm: OsmData, cemeteries: CemeteryPlan[], town?: Town | null): Spot | null {
+  if (id === 'stjoseph') {
+    // On C Street, looking at the church front.
+    const l = town?.landmark('stjoseph');
+    if (!l) return null;
+    const s = nearestOn(osm, (n) => n === 'C Street', l.x, l.z);
+    if (!s) return null;
+    return { x: s.x, z: s.z, psi: Math.atan2(l.x - s.x, l.z - s.z), road: false };
+  }
   const anchor = ROAD_ANCHORS[id];
   if (anchor) {
     const s = nearestOn(osm, (n) => n === anchor[0], anchor[1], anchor[2]);

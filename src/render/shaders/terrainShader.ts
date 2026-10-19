@@ -38,6 +38,8 @@ ${terrainCommon}
 uniform sampler2D uImgInner;
 uniform sampler2D uImgMid;
 uniform sampler2D uImgFar;
+uniform sampler2D uImgTown;
+uniform vec3 uTown;     // town orthophoto centre x, z and size (0 = none)
 uniform sampler2D uMaskA;
 uniform sampler2D uMaskB;
 uniform float uLcSize;
@@ -84,6 +86,8 @@ void main() {
   vec3 alb = texture(uImgFar, regionUV(xz, uRegionSize.z)).rgb;
   if (w.y > 0.0) alb = mix(alb, texture(uImgMid, regionUV(xz, uRegionSize.y)).rgb, w.y);
   if (w.x > 0.0) alb = mix(alb, texture(uImgInner, regionUV(xz, uRegionSize.x)).rgb, w.x);
+  float wTown = uTown.z > 0.0 ? regionWeight(uTown.z, xz - uTown.xy) : 0.0;
+  if (wTown > 0.0) alb = mix(alb, texture(uImgTown, regionUV(xz - uTown.xy, uTown.z)).rgb, wTown);
   // Orthophotos are exposed for display; bring them down to physical albedo.
   alb *= 0.62;
 
@@ -163,6 +167,7 @@ void main() {
   float farm = (1.0 - natural) * (1.0 - mB.b) * (1.0 - mA.a) * (1.0 - mB.a * 0.7)
              * (1.0 - smoothstep(0.12, 0.3, slope)) * (1.0 - smoothstep(90.0, 250.0, vWorld.y));
   farm *= 1.0 - w.x * 0.55;
+  farm *= 1.0 - wTown * 0.7;
   if (farm > 0.01) {
     const float SEC = 402.3;
     vec2 cell = floor(xz / SEC);
