@@ -1,6 +1,6 @@
 // Builds the real-world datasets the game streams at runtime.
 //   node scripts/fetch-data.mjs [step...]
-// Steps: height, imagery, landcover, derived, osm (default: all)
+// Steps: height, imagery, landcover, derived, trees, osm, marysville (default: all)
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import { CENTER } from './lib/geo.mjs';
 import { buildMosaic } from './lib/tiles.mjs';
 import { buildLandcover, LC } from './lib/landcover.mjs';
 import { buildOsm } from './lib/osm.mjs';
+import { buildMarysville, TOWN } from './lib/marysville.mjs';
 import { canopyMask, horizonAO, readHeight } from './lib/derived.mjs';
 import { detectTrees } from './lib/trees.mjs';
 
@@ -186,6 +187,35 @@ const steps = {
     const osm = await buildOsm(REGIONS.mid.size, path.resolve('.cache/osm'));
     for (const [k, v] of Object.entries(osm)) console.log(`  ${k.padEnd(10)} ${v.length}`);
     await fs.writeFile(path.join(OUT, 'osm.json'), JSON.stringify(osm));
+  },
+  async marysville() {
+    console.log('town/marysville');
+    const town = await buildMarysville(path.resolve('.cache/osm'));
+    for (const k of ['buildings', 'bridges', 'walks', 'spots']) console.log(`  ${k.padEnd(10)} ${town[k].length}`);
+    const tagged = town.buildings.filter((b) => b.t).length;
+    console.log(`  ${tagged} buildings with mapped heights, ${town.buildings.filter((b) => b.id).map((b) => b.id).join(', ')}`);
+    await fs.writeFile(path.join(OUT, 'marysville.json'), JSON.stringify(town));
+
+    // Full-resolution orthophoto over town (USGS tops out at z16 here, ~1.7 m per pixel).
+    const res = 3072;
+    const sample = await buildMosaic('usgsImagery', 16, TOWN.size * 1.02, TOWN.x, TOWN.z);
+    const raw = Buffer.alloc(res * res * 3);
+    const rgb = [0, 0, 0];
+    const step = TOWN.size / res;
+    for (let j = 0; j < res; j++) {
+      const z = TOWN.z - TOWN.size / 2 + (j + 0.5) * step;
+      for (let i = 0; i < res; i++) {
+        sample(TOWN.x - TOWN.size / 2 + (i + 0.5) * step, z, rgb);
+        const o = (j * res + i) * 3;
+        raw[o] = rgb[0];
+        raw[o + 1] = rgb[1];
+        raw[o + 2] = rgb[2];
+      }
+    }
+    await sharp(raw, { raw: { width: res, height: res, channels: 3 } })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toFile(path.join(OUT, 'imagery_marysville.jpg'));
+    await writeMeta({ town: { name: TOWN.name, center: town.center, size: TOWN.size, imageRes: res } });
   },
 };
 

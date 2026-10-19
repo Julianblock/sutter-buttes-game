@@ -65,13 +65,14 @@ async function pool(items, limit, fn) {
 }
 
 /**
- * Downloads every tile needed to cover a square local region and returns a
- * bilinear sampler over the decoded RGB mosaic in local coordinates.
+ * Downloads every tile needed to cover a square local region (centred on
+ * cx, cz) and returns a bilinear sampler over the decoded RGB mosaic in local
+ * coordinates.
  */
-export async function buildMosaic(sourceName, zoom, size) {
+export async function buildMosaic(sourceName, zoom, size, cx = 0, cz = 0) {
   const h = size / 2;
-  const nw = localToLatLon(-h, -h);
-  const se = localToLatLon(h, h);
+  const nw = localToLatLon(cx - h, cz - h);
+  const se = localToLatLon(cx + h, cz + h);
   const a = latLonToMercatorPx(nw.lat, nw.lon, zoom);
   const b = latLonToMercatorPx(se.lat, se.lon, zoom);
   const tx0 = Math.floor(a.px / 256) - 1;

@@ -5,7 +5,7 @@ import { latLonToLocal, regionBounds } from './geo.mjs';
 const UA = 'sutter-buttes-game/0.1 (github.com/Julianblock/sutter-buttes-game)';
 const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 
-async function overpass(query, cacheFile) {
+export async function overpass(query, cacheFile) {
   try {
     return JSON.parse(await fs.readFile(cacheFile, 'utf8'));
   } catch {}
