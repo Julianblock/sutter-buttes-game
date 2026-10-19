@@ -53,8 +53,10 @@ import { Ghosts } from './life/ghosts';
 import { Discoveries } from './ui/discoveries';
 import { Lore } from './world/lore';
 import { VolcanoVision } from './world/volcano';
-import { isTouch } from './ui/device';
+import { isTouch, lowPower } from './ui/device';
 import { TouchControls } from './ui/touch';
+import { Town } from './world/town';
+import { Pedestrians } from './life/pedestrians';
 
 function paletteFor(s: GameSettings): Palette {
   const sp = speciesById(s.bird) ?? SPECIES[0];
@@ -120,9 +122,14 @@ async function boot() {
   engine.scene.add(motes.points);
 
   loading.progress('Raising barns and broadcast towers', 0.97);
+  // Before roads and traffic: the town's bridge decks carry them over the rivers.
+  const town = world.town ? new Town(world.town.data, heightfield, water, world.osm) : null;
+  const pedestrians = town ? new Pedestrians(town, world.osm, roadIndex, heightfield, lowPower ? 900 : 2800) : null;
+  if (town) engine.scene.add(town.group);
+  if (pedestrians) engine.scene.add(pedestrians.mesh);
   const power = new PowerLines(world.osm, heightfield);
-  const props = new Props(world.osm, heightfield, power.pylons);
-  const lights = new LightPoints(props.lights);
+  const props = new Props(world.osm, heightfield, power.pylons, town ? (x, z) => town.covers(x, z) : undefined);
+  const lights = new LightPoints([...props.lights, ...(town?.lights ?? [])]);
   engine.scene.add(props.group, lights.points, power.mesh);
   const cemeteries = new Cemeteries(cemeteryPlans, heightfield);
   engine.scene.add(cemeteries.group);
@@ -167,6 +174,8 @@ async function boot() {
   const shadow = new ShadowMap();
   trees.addShadowCasters(shadow);
   props.addShadowCasters(shadow);
+  town?.addShadowCasters(shadow);
+  pedestrians?.addShadowCasters(shadow);
   cemeteries.addShadowCasters(shadow);
   wildlife.addShadowCasters(shadow);
   player.shadowCaster = shadow.addCaster(player.model.geometry, createBirdShadowMaterial(), player.object);
@@ -178,12 +187,12 @@ async function boot() {
   const chase = new ChaseCamera(cam, heightfield, canvas);
   const drive = new DriveControls(controls, canvas);
   const driveCam = new DriveCamera(cam, heightfield);
-  const places = new Places(world.osm);
+  const places = new Places(world.osm, town?.landmarks);
   const hud = new Hud(places);
   hud.units = settings.units;
   const menu = new Menu(settings);
   const journal = new Discoveries();
-  const lore = new Lore(heightfield, journal, volcano, witches);
+  const lore = new Lore(heightfield, journal, volcano, witches, town);
   journal.total = lore.ids.length + FISH.length + (ghosts ? 1 : 0);
   fish.onSpot = (s) => journal.discover({ id: 'fish-' + s.id, kind: 'fish', kicker: 'Fish spotted', title: s.name, text: s.note });
   if (ghosts)
@@ -327,7 +336,7 @@ async function boot() {
   addEventListener('keydown', wake);
   /** Moves the truck or the bird to a named destination picked in the menu. */
   const goTo = (id: string) => {
-    const s = resolveDestination(id, world.osm, cemeteryPlans);
+    const s = resolveDestination(id, world.osm, cemeteryPlans, town);
     if (!s) return;
     let { x, z } = s;
     if (driving) {
@@ -620,7 +629,7 @@ async function boot() {
     car.model.weather(dt, car.physics.speed);
     car.physics.wet = G.uWet.value;
     car.physics.snow = G.uSnowCover.value;
-    car.physics.waterDepth = water.depthAt(car.physics.pos.x, car.physics.pos.z);
+    car.physics.waterDepth = car.physics.onDeck ? 0 : water.depthAt(car.physics.pos.x, car.physics.pos.z);
     const actor = driving ? car.object.position : player.object.position;
     wildlife.update(dt, cam.position, actor);
     flocks.setMonth(env.month);
@@ -652,6 +661,8 @@ async function boot() {
     }
     const focus = free ? cam.position : actor;
     props.update(cam.position, focus);
+    town?.update(cam.position, focus);
+    pedestrians?.update(dt, cam.position, env.hours);
     shadow.update(engine.renderer, focus);
     G.uInvExposure.value = 1 / env.exposure;
     updateSound(dt);
@@ -663,7 +674,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    touch, engine, env, terrain, water, waterSurface, fish, ghosts, volcano, journal, lore, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
+    town, pedestrians, touch, engine, env, terrain, water, waterSurface, fish, ghosts, volcano, journal, lore, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     /** Renders a frame and returns it as a JPEG data URL (debug capture). */
     snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {

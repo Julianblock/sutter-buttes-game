@@ -1,3 +1,4 @@
+import type { Decks } from './decks';
 import type { HeightGrid, Pixels, WorldData } from './loader';
 import { LC } from './meta';
 
@@ -29,6 +30,8 @@ export class Heightfield {
   private readonly lc: Pixels;
   private readonly lcSize: number;
   private readonly canopy: Pixels;
+  /** Bridge decks over the rivers, when a town has them. */
+  decks: Decks | null = null;
 
   constructor(world: WorldData) {
     this.inner = world.heights.inner;
@@ -46,6 +49,11 @@ export class Heightfield {
     if (wm > 0) h += (bilinear(this.mid, this.mid.heights, x, z) - h) * wm;
     if (wi > 0) h += (bilinear(this.inner, this.inner.heights, x, z) - h) * wi;
     return h;
+  }
+
+  /** Road surface for travel along heading (hx, hz): a bridge deck where there is one. */
+  roadHeight(x: number, z: number, hx: number, hz: number, nearY?: number): number {
+    return this.decks?.at(x, z, hx, hz, nearY) ?? this.height(x, z);
   }
 
   ao(x: number, z: number): number {

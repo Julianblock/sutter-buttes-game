@@ -17,9 +17,10 @@ const AREAS: Area[] = [
   { name: 'Sutter National Wildlife Refuge', x: 4700, z: 11600, r: 3200, note: 'Bypass wetlands south of the Buttes' },
   { name: 'Sutter Bypass', x: -3500, z: 9000, r: 2200, note: 'Flood channel lined with cottonwoods' },
   { name: 'Feather River', x: 17800, z: 3000, r: 1500 },
+  { name: 'Ellis Lake', x: 19560, z: 6430, r: 240, note: 'Marysville' },
 ];
 
-const HIDDEN_ROADS = new Set(['CA 99', 'State Highway 20', 'Route 20', 'Colusa Highway', 'Pass Road', 'West Butte Road', 'South Butte Road', 'North Butte Road', 'East Butte Road', 'Butte House Road', 'Township Road', 'North Township Road', 'South Township Road', 'Garden Highway']);
+const HIDDEN_ROADS = new Set(['Twin Cities Memorial Bridge', 'D Street', 'E Street', 'CA 99', 'State Highway 20', 'Route 20', 'Colusa Highway', 'Pass Road', 'West Butte Road', 'South Butte Road', 'North Butte Road', 'East Butte Road', 'Butte House Road', 'Township Road', 'North Township Road', 'South Township Road', 'Garden Highway']);
 
 export interface PlaceInfo {
   title: string;
@@ -31,7 +32,10 @@ export class Places {
   private roadGrid = new Map<string, { name: string; ax: number; az: number; bx: number; bz: number }[]>();
   private readonly cell = 250;
 
-  constructor(private osm: OsmData) {
+  constructor(
+    private osm: OsmData,
+    private landmarks: { name: string; x: number; z: number }[] = [],
+  ) {
     for (const r of osm.roads) {
       if (!r.name || !HIDDEN_ROADS.has(r.name)) continue;
       const p = r.pts;
@@ -87,6 +91,12 @@ export class Places {
     if (peak) {
       const sub = peak.ele ? `${peak.ele} m · ${Math.round(peak.ele * 3.281)} ft summit` : 'Sutter Buttes';
       return { title: peak.name, subtitle: sub };
+    }
+
+    if (agl < 250) {
+      for (const l of this.landmarks) {
+        if (Math.hypot(l.x - x, l.z - z) < 70) return { title: l.name, subtitle: 'Marysville' };
+      }
     }
 
     for (const a of AREAS) {

@@ -74,6 +74,8 @@ export class Terrain {
         uImgInner: { value: tex.imgInner },
         uImgMid: { value: tex.imgMid },
         uImgFar: { value: tex.imgFar },
+        uImgTown: { value: tex.imgTown },
+        uTown: { value: tex.town },
         uMaskA: { value: tex.maskA },
         uMaskB: { value: tex.maskB },
         uRegionSize: { value: new THREE.Vector3(...regionSizes) },

@@ -16,7 +16,8 @@ The terrain, land cover, roads, buildings and trees all come from real survey da
 - **Roads and traffic.** Cars, pickups and big rigs drive the real road network, including Pass Road through the Buttes. Headlights and taillights show at night.
 - **Ranch tracks.** The private dirt tracks that wind into the range are mapped too: two-rut adobe lanes with a grassy crown that turn to mud in the rain. A graded one leaves North Butte Road for the slopes of North Butte.
 - **Old cemeteries.** North Butte Cemetery (the "witches' cemetery") sits at the end of a long dirt lane off North Butte Road under a big valley oak, with weathered marble tablets, obelisks, toppled and broken stones, an iron fence and a "closed sunset to sunrise" sign. Noyesburg, Stohlman and the tiny Pugh family plot are built from their real outlines too.
-- **Places.** The menu's Places tab starts you on Pass Road, North Butte Road, West Butte Road, at the cemetery gate or on the ranch track to North Butte.
+- **Marysville.** Fly east across the Feather River to the old Gold Rush river port. Every building in a 5 km square around downtown is extruded from its real OpenStreetMap footprint, with tagged heights where mappers have recorded them and roof shapes, materials and storeys estimated from building type everywhere else. Downtown gets brick fronts with shopfronts, sash windows and cornices. St. Joseph Church (1855) has its white nave, lancet windows, rose window and 100 ft spire, and the Bok Kai Temple (1880) stands on the levee at the foot of D Street. Over the river are the 2019 Twin Cities Memorial Bridge beside the 1906–07 Northern Electric Pratt trusses, the 1947 Tenth Street bridge and the E Street bridge over the Yuba, all on piers above the water. Cars and the truck drive across their decks. On a Saturday night (or any night) the downtown sidewalks fill with people heading out. See [docs/marysville.md](docs/marysville.md).
+- **Places.** The menu's Places tab starts you on Pass Road, North Butte Road, West Butte Road, at the cemetery gate, on the ranch track to North Butte, in downtown Marysville, on the Twin Cities Memorial Bridge or in front of St. Joseph Church.
 - **Weather.** Clear, haze, scattered cloud, overcast, tule fog, rain, thunderstorms and snow. Rain soaks the ground and roads into reflective puddles with raindrop rings; snow builds up on fields, trees, roads and the truck, then melts depending on the season and sun. Lightning lights up the valley, and its thunder arrives late by the strike's distance. Wet roads cut tyre grip and can aquaplane the truck, fields turn to mud, snow makes everything slide, and showers bring downdrafts and turbulence that weigh a bird down.
 - **Drive a pickup.** Swap between bird and truck at any time. The truck has a first-person cockpit with live gauges, headlights, wipers, dust and spray trails, and collisions with trees.
 - **Structures.** Farmhouses, metal sheds, rice silos and the South Butte antenna farm with blinking beacons. Towns get lit windows, porch lights and streetlights.
@@ -67,11 +68,11 @@ npm run build
 npm run data      # rebuild public/data from USGS / USDA / OSM sources
 ```
 
-Debug URL parameters: `?fly` skips the menu, `?drive` starts in the truck, `?weather=rain` (or `storm`, `snow`, `tulefog`, …) and `?time=midday` pick conditions, `?place=cemetery` (or `pass`, `northbutte`, `westbutte`, `track`) picks the start point, and `?free&cam=x,y,z,yaw,pitch` starts a free camera.
+Debug URL parameters: `?fly` skips the menu, `?drive` starts in the truck, `?weather=rain` (or `storm`, `snow`, `tulefog`, …) and `?time=midday` pick conditions, `?place=cemetery` (or `pass`, `northbutte`, `westbutte`, `track`, `marysville`, `bridge`, `stjoseph`) picks the start point, and `?free&cam=x,y,z,yaw,pitch` starts a free camera.
 
 ## Data sources
 
 - Elevation: AWS Terrain Tiles (USGS 3DEP / SRTM)
-- Imagery: USGS National Map imagery
+- Imagery: USGS National Map imagery (including a 1.7 m/pixel mosaic of Marysville)
 - Land cover: USDA NASS Cropland Data Layer
-- Roads, buildings and masts: © OpenStreetMap contributors
+- Roads, buildings, bridges and masts: © OpenStreetMap contributors

@@ -79,5 +79,14 @@
   "trees": {
     "size": 16000,
     "count": 571512
+  },
+  "town": {
+    "name": "Marysville",
+    "center": [
+      19477.8,
+      6772.2
+    ],
+    "size": 5200,
+    "imageRes": 3072
   }
 }

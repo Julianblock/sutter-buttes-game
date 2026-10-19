@@ -17,6 +17,54 @@ export interface WorldMeta {
   heightEncoding: Record<RegionName, HeightEncoding>;
   landcover: { size: number; res: number; classes: Record<string, number> };
   trees?: { size: number; count: number };
+  /** Detailed town zone (Marysville), with its own orthophoto. */
+  town?: { name: string; center: [number, number]; size: number; imageRes: number };
+}
+
+export interface TownBuilding {
+  /** Kind code from TownData.kinds. */
+  k: number;
+  /** Wall height (m) from the ground to the eave or parapet. */
+  h: number;
+  /** Storeys. */
+  l: number;
+  /** Roof form from TownData.roofs. */
+  r: number;
+  /** Footprint ring x0, z0, x1, z1… wound counter-clockwise in x/z. */
+  p: number[];
+  /** 1 when height or storeys come from OSM tags rather than estimates. */
+  t?: number;
+  n?: string;
+  /** Landmark id for hand-built details. */
+  id?: string;
+  c?: string;
+  /** Inside the historic downtown core. */
+  d?: number;
+}
+
+export interface TownBridge {
+  k: 'road' | 'rail' | 'oldrail' | 'foot';
+  n: string;
+  ref: string;
+  loc: string;
+  w: number;
+  lanes: number;
+  layer: number;
+  boardwalk: number;
+  pts: number[];
+}
+
+export interface TownData {
+  name: string;
+  center: [number, number];
+  size: number;
+  core: [number, number][];
+  kinds: Record<string, number>;
+  roofs: Record<string, number>;
+  buildings: TownBuilding[];
+  bridges: TownBridge[];
+  walks: { k: string; pts: number[] }[];
+  spots: { n: string; k: string; x: number; z: number }[];
 }
 
 export const LC = {

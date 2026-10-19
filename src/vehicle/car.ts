@@ -100,6 +100,8 @@ export class CarPhysics {
   snow = 0;
   /** Depth of river or pond water at the truck (m). */
   waterDepth = 0;
+  /** Driving on a bridge deck rather than the ground. */
+  onDeck = false;
   road: RoadHit | null = null;
   /** Speed of the latest collision (m/s), decaying; drives shake and sound. */
   impact = 0;
@@ -143,7 +145,7 @@ export class CarPhysics {
 
   /** Puts the car at rest exactly at (x, z) facing `psi`. */
   place(x: number, z: number, psi: number) {
-    this.pos.set(x, this.hf.height(x, z), z);
+    this.pos.set(x, this.hf.roadHeight(x, z, Math.sin(psi), Math.cos(psi)), z);
     this.psi = psi;
     this.vel.set(0, 0, 0);
     this.speed = 0;
@@ -222,7 +224,7 @@ export class CarPhysics {
     // Rolling resistance, drag, slope.
     // Automatic in park: hold on hills when stopped with no pedals pressed.
     const parked = inp.throttle < 0.02 && inp.brake < 0.02 && Math.abs(vf) < 1.0;
-    const n = this.hf.normal(this.pos.x, this.pos.z, { x: 0, y: 1, z: 0 }, 3);
+    const n = this.onDeck ? { x: 0, y: 1, z: 0 } : this.hf.normal(this.pos.x, this.pos.z, { x: 0, y: 1, z: 0 }, 3);
     if (!parked) a += G * (n.x * f.x + n.z * f.z);
     else a -= vf * 4;
     const resist = s.roll * G + 0.00042 * vf * vf;
@@ -294,7 +296,13 @@ export class CarPhysics {
     const r = new THREE.Vector3(-f.z, 0, f.x);
     const { x, z } = this.pos;
     const hw = WHEELBASE / 2, ht = TRACK / 2;
-    const h = (sf: number, sr: number) => this.hf.height(x + f.x * sf + r.x * sr, z + f.z * sf + r.z * sr);
+    const nearY = this.pos.y - this.roadLift;
+    this.onDeck = this.hf.decks?.at(x, z, f.x, f.z, nearY) != null;
+    const h = (sf: number, sr: number) => {
+      const wx = x + f.x * sf + r.x * sr;
+      const wz = z + f.z * sf + r.z * sr;
+      return this.onDeck ? this.hf.roadHeight(wx, wz, f.x, f.z, nearY) : this.hf.height(wx, wz);
+    };
     const fl = h(hw, -ht), fr = h(hw, ht), rl = h(-hw, -ht), rr = h(-hw, ht);
     const ground = (fl + fr + rl + rr) / 4;
     const pitchSlope = (fl + fr - rl - rr) / 2 / WHEELBASE;

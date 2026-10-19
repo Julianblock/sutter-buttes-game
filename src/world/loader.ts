@@ -1,4 +1,4 @@
-import type { OsmData, RegionName, WorldMeta } from './meta';
+import type { OsmData, RegionName, TownData, WorldMeta } from './meta';
 
 const BASE = `${import.meta.env.BASE_URL}data/`;
 
@@ -22,6 +22,7 @@ export interface WorldData {
   landcover: Pixels;
   canopy: Pixels;
   osm: OsmData;
+  town: { data: TownData; imagery: ImageBitmap } | null;
 }
 
 type Progress = (label: string, fraction: number) => void;
@@ -83,6 +84,19 @@ export async function loadWorld(onProgress: Progress): Promise<WorldData> {
   jobs.push(['Crop & land cover', async () => (landcover = readPixels(await fetchBitmap('landcover.png')))]);
   jobs.push(['Oak canopy', async () => (canopy = readPixels(await fetchBitmap('canopy_inner.png')))]);
   jobs.push(['Roads & towns', async () => (osm = await (await fetch(BASE + 'osm.json')).json())]);
+  let town: WorldData['town'] = null;
+  if (meta.town) {
+    jobs.push([
+      `${meta.town.name}`,
+      async () => {
+        const [data, imagery] = await Promise.all([
+          fetch(BASE + 'marysville.json').then((r) => r.json() as Promise<TownData>),
+          fetchBitmap('imagery_marysville.jpg'),
+        ]);
+        town = { data, imagery };
+      },
+    ]);
+  }
 
   let done = 0;
   await Promise.all(
@@ -93,5 +107,5 @@ export async function loadWorld(onProgress: Progress): Promise<WorldData> {
     }),
   );
 
-  return { meta, heights, imagery, landcover, canopy, osm };
+  return { meta, heights, imagery, landcover, canopy, osm, town };
 }
