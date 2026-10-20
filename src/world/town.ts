@@ -255,7 +255,7 @@ export class Town {
     this.shadowMaterial.defines = { SHADOW_PASS: '' };
 
     for (const b of data.buildings) this.addBuilding(b);
-    for (const br of data.bridges) this.addBridge(br);
+    for (const br of joinBridges(data.bridges)) this.addBridge(br);
 
     for (const [, bld] of this.builders) {
       if (!bld.pos.length) continue;
@@ -743,18 +743,30 @@ export class Town {
     const wet = new Float32Array(m);
     const req = new Float32Array(m);
     const foot = br.k === 'foot';
-    const clear = br.boardwalk ? 0.6 : foot ? 3.0 : 6.5;
     for (let i = 0; i < m; i++) {
       const x = pts[i * 2], z = pts[i * 2 + 1];
       ground[i] = this.hf.height(x, z);
-      const w = this.water.sample(x, z);
-      wet[i] = w.mask;
+      wet[i] = this.water.sample(x, z).mask;
+    }
+    let wetLen = 0;
+    for (let i = 1; i < m; i++) if (wet[i] > 0.3) wetLen += cum[i] - cum[i - 1];
+    // River bridges stand at levee height, well clear of the water; small crossings less so.
+    const clear = br.boardwalk ? 0.6 : foot ? 3.5 : wetLen > 60 ? (br.k === 'oldrail' ? 8.5 : 10) : Math.min(6.5, 2 + wetLen * 0.08);
+    for (let i = 0; i < m; i++) {
+      const w = this.water.sample(pts[i * 2], pts[i * 2 + 1]);
       req[i] = Math.max(ground[i] + (br.boardwalk ? 0.4 : 1.0), w.mask > 0.3 ? w.level + clear : -Infinity);
     }
-    // Deck: level between the abutments, lifted clear of the water, smoothed.
-    const g0 = ground[0], g1 = ground[m - 1];
+    // Deck: level between the abutments (the levee crests), lifted clear of the water, smoothed.
+    const crest = (from: number, dir: number) => {
+      let h = ground[from];
+      for (let i = from; i >= 0 && i < m && Math.abs(cum[i] - cum[from]) < 60; i += dir) if (wet[i] < 0.3) h = Math.max(h, ground[i]);
+      return h;
+    };
+    const g0 = br.boardwalk ? ground[0] : crest(0, 1), g1 = br.boardwalk ? ground[m - 1] : crest(m - 1, -1);
     let y = new Float32Array(m);
-    for (let i = 0; i < m; i++) y[i] = Math.max(g0 + (g1 - g0) * (cum[i] / (len || 1)), req[i]);
+    let top = Math.max(g0, g1);
+    for (let i = 0; i < m; i++) top = Math.max(top, req[i]);
+    for (let i = 0; i < m; i++) y[i] = br.boardwalk ? Math.max(g0 + (g1 - g0) * (cum[i] / (len || 1)), req[i]) : top;
     const R = Math.max(1, Math.round(30 / 6));
     const filt = (src: Float32Array, op: 'max' | 'avg') => {
       const dst = new Float32Array(m);
@@ -770,10 +782,13 @@ export class Town {
       return dst;
     };
     if (!br.boardwalk) y = filt(filt(filt(y, 'max'), 'avg'), 'avg');
+    // Ramp down to the road at each end, unless that end stops out over the water.
     for (let i = 0; i < m; i++) {
-      const e = Math.min(cum[i], len - cum[i]);
-      const end = cum[i] < len / 2 ? g0 : g1;
-      y[i] = end + (y[i] - end) * smoothstep(0, Math.min(25, len / 3), e);
+      const first = cum[i] < len / 2;
+      if (wet[first ? 0 : m - 1] > 0.3) continue;
+      const e = first ? cum[i] : len - cum[i];
+      const end = ground[first ? 0 : m - 1];
+      y[i] = end + (y[i] - end) * smoothstep(0, Math.min(45, len / 4), e);
     }
 
     const half = br.w / 2;
@@ -932,6 +947,41 @@ export class Town {
   landmark(id: string) {
     return this.landmarks.find((l) => l.id === id);
   }
+}
+
+/** OSM splits long bridges into several ways (at piers, lane changes); chain them back into one deck. */
+function joinBridges(list: TownBridge[]): TownBridge[] {
+  const out = list.map((b) => ({ ...b, pts: [...b.pts] }));
+  const near = (ax: number, az: number, bx: number, bz: number) => Math.hypot(ax - bx, az - bz) < 3;
+  for (let merged = true; merged; ) {
+    merged = false;
+    for (let i = 0; i < out.length && !merged; i++) {
+      for (let j = 0; j < out.length && !merged; j++) {
+        if (i === j || out[i].k !== out[j].k || out[i].boardwalk !== out[j].boardwalk) continue;
+        const a = out[i].pts, b = out[j].pts;
+        const n = a.length;
+        // Only carry straight on: no U-turns onto the opposite carriageway.
+        const ahead = (cx: number, cz: number) => {
+          const ex = a[n - 2] - a[n - 4], ez = a[n - 1] - a[n - 3];
+          const fx = cx - a[n - 2], fz = cz - a[n - 1];
+          return (ex * fx + ez * fz) / ((Math.hypot(ex, ez) || 1) * (Math.hypot(fx, fz) || 1)) > 0.7;
+        };
+        if (near(a[n - 2], a[n - 1], b[0], b[1]) && ahead(b[2], b[3])) {
+          out[i].pts = [...a, ...b.slice(2)];
+        } else if (near(a[n - 2], a[n - 1], b[b.length - 2], b[b.length - 1]) && ahead(b[b.length - 4], b[b.length - 3])) {
+          const r: number[] = [];
+          for (let k = b.length - 4; k >= 0; k -= 2) r.push(b[k], b[k + 1]);
+          out[i].pts = [...a, ...r];
+        } else continue;
+        // A named part (e.g. "Twin Cities Memorial Bridge") names the whole.
+        if (!out[i].n && out[j].n) out[i].n = out[j].n;
+        if (!out[i].loc && out[j].loc) out[i].loc = out[j].loc;
+        out.splice(j, 1);
+        merged = true;
+      }
+    }
+  }
+  return out;
 }
 
 function smoothstep(a: number, b: number, x: number) {
