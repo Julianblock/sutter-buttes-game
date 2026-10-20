@@ -5,6 +5,7 @@ import { STYLE, townFragment, townVertex } from '../render/shaders/townShader';
 import { Decks } from './decks';
 import type { Heightfield } from './heightfield';
 import type { OsmData, TownBridge, TownBuilding, TownData } from './meta';
+import { roadSpec } from './roads';
 import type { Water } from './water';
 
 type RGB = [number, number, number];
@@ -256,6 +257,7 @@ export class Town {
 
     for (const b of data.buildings) this.addBuilding(b);
     for (const br of joinBridges(data.bridges)) this.addBridge(br);
+    for (const br of this.crossings()) this.addBridge(br, true);
 
     for (const [, bld] of this.builders) {
       if (!bld.pos.length) continue;
@@ -720,7 +722,114 @@ export class Town {
 
   // ------------------------------------------------------------------ bridges
 
-  private addBridge(br: TownBridge) {
+  /**
+   * Everywhere else in the valley OSM roads are draped on the terrain, which is
+   * carved under the rivers. Find the stretches that run through water: crossings
+   * (water on both sides) become bridges, levee-top roads beside it become embankments.
+   */
+  private crossings(): TownBridge[] {
+    const out: TownBridge[] = [];
+    const STEP = 8;
+    const under = (x: number, z: number) => {
+      const w = this.water.sample(x, z);
+      return w.mask > 0.35 && w.level > this.hf.height(x, z) - 0.2;
+    };
+    for (const r of this.osm.roads) {
+      if (r.kind === 'track' || r.kind === 'service' || r.kind === 'path') continue;
+      const spec = roadSpec(r);
+      const pts: number[] = [];
+      const p = r.pts;
+      for (let i = 0; i + 3 < p.length; i += 2) {
+        const n = Math.max(1, Math.ceil(Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]) / STEP));
+        for (let k = 0; k < n; k++) pts.push(p[i] + ((p[i + 2] - p[i]) * k) / n, p[i + 1] + ((p[i + 3] - p[i + 1]) * k) / n);
+      }
+      pts.push(p[p.length - 2], p[p.length - 1]);
+      const m = pts.length / 2;
+      const wet: boolean[] = [];
+      for (let i = 0; i < m; i++) wet.push(under(pts[i * 2], pts[i * 2 + 1]));
+      // Runs of wet samples, bridging short dry gaps, padded onto dry land.
+      for (let i = 0; i < m; i++) {
+        if (!wet[i]) continue;
+        let j = i, gap = 0;
+        for (let k = i + 1; k < m && gap * STEP < 25; k++) {
+          if (wet[k]) {
+            j = k;
+            gap = 0;
+          } else gap++;
+        }
+        const a = Math.max(0, i - 3), b = Math.min(m - 1, j + 3);
+        i = j + 1;
+        const mid = Math.floor((a + b) / 2);
+        const mx = pts[mid * 2], mz = pts[mid * 2 + 1];
+        const dx = pts[Math.min(b, mid + 1) * 2] - pts[Math.max(a, mid - 1) * 2];
+        const dz = pts[Math.min(b, mid + 1) * 2 + 1] - pts[Math.max(a, mid - 1) * 2 + 1];
+        const dl = Math.hypot(dx, dz) || 1;
+        if (this.decks.at(mx, mz, dx / dl, dz / dl) != null) continue;
+        // Water on both sides of the road: a crossing. Otherwise the road runs along a bank.
+        let across = 0, n = 0;
+        for (let k = a; k <= b; k++) {
+          if (!wet[k]) continue;
+          const kk = Math.min(b, k + 1), kp = Math.max(a, k - 1);
+          const ex = pts[kk * 2] - pts[kp * 2], ez = pts[kk * 2 + 1] - pts[kp * 2 + 1];
+          const el = Math.hypot(ex, ez) || 1;
+          const off = spec.half + 18;
+          const x = pts[k * 2], z = pts[k * 2 + 1];
+          if (under(x - (ez / el) * off, z + (ex / el) * off) && under(x + (ez / el) * off, z - (ex / el) * off)) across++;
+          n++;
+        }
+        out.push({
+          k: 'road',
+          n: r.name,
+          ref: '',
+          loc: '',
+          w: spec.half * 2,
+          lanes: r.lanes || 2,
+          layer: 1,
+          boardwalk: 0,
+          pts: pts.slice(a * 2, b * 2 + 2),
+          levee: across < n * 0.5,
+        });
+      }
+    }
+    return out;
+  }
+
+  /** Earth embankment under a levee-top road: asphalt crest, grassy slopes down to the ground. */
+  private embankment(out: Builder, pts: number[], y: Float32Array, half: number) {
+    const m = y.length;
+    const earth = rgb('#77704f');
+    const asphalt = rgb('#5d5c5a');
+    let u = 0;
+    for (let i = 0; i < m - 1; i++) {
+      const ax = pts[i * 2], az = pts[i * 2 + 1], bx = pts[i * 2 + 2], bz = pts[i * 2 + 3];
+      const l = Math.hypot(bx - ax, bz - az) || 1;
+      const nx = -(bz - az) / l, nz = (bx - ax) / l;
+      const ya = y[i], yb = y[i + 1];
+      const f = (uu: number) => [uu, 0, 0, 0];
+      const e = half + 0.8;
+      out.quad([ax - nx * e, ya, az - nz * e], [bx - nx * e, yb, bz - nz * e], [bx + nx * e, yb, bz + nz * e], [ax + nx * e, ya, az + nz * e], asphalt, STYLE.DECK, f(u), f(u + l), f(u + l), f(u), [0, 1, 0]);
+      for (const sd of [1, -1]) {
+        const ga = this.hf.height(ax + nx * e * sd, az + nz * e * sd) - 1;
+        const gb = this.hf.height(bx + nx * e * sd, bz + nz * e * sd) - 1;
+        const wa = e + Math.max(1, (ya - ga) * 2), wb = e + Math.max(1, (yb - gb) * 2);
+        out.quad(
+          [ax + nx * e * sd, ya, az + nz * e * sd],
+          [bx + nx * e * sd, yb, bz + nz * e * sd],
+          [bx + nx * wb * sd, Math.min(gb, yb - 1), bz + nz * wb * sd],
+          [ax + nx * wa * sd, Math.min(ga, ya - 1), az + nz * wa * sd],
+          earth,
+          STYLE.DECK,
+          f(u),
+          f(u + l),
+          f(u + l),
+          f(u),
+        );
+      }
+      u += l;
+    }
+  }
+
+  private addBridge(br: TownBridge, anywhere = false) {
     const raw = br.pts;
     const pts: number[] = [];
     for (let i = 0; i + 3 < raw.length; i += 2) {
@@ -732,7 +841,7 @@ export class Town {
     const m = pts.length / 2;
     if (m < 2) return;
     const mx = pts[Math.floor(m / 2) * 2], mz = pts[Math.floor(m / 2) * 2 + 1];
-    if (!this.covers(mx, mz)) return;
+    if (!anywhere && !this.covers(mx, mz)) return;
     if (br.k === 'road' && /twin cities/i.test(br.n) && !this.landmark('twincities'))
       this.landmarks.push({ id: 'twincities', name: 'Twin Cities Memorial Bridge', x: mx, z: mz });
 
@@ -751,7 +860,7 @@ export class Town {
     let wetLen = 0;
     for (let i = 1; i < m; i++) if (wet[i] > 0.3) wetLen += cum[i] - cum[i - 1];
     // River bridges stand at levee height, well clear of the water; small crossings less so.
-    const clear = br.boardwalk ? 0.6 : foot ? 3.5 : wetLen > 60 ? (br.k === 'oldrail' ? 8.5 : 10) : Math.min(6.5, 2 + wetLen * 0.08);
+    const clear = br.levee ? 1.2 : br.boardwalk ? 0.6 : foot ? 3.5 : wetLen > 60 ? (br.k === 'oldrail' ? 8.5 : 10) : Math.min(6.5, 2 + wetLen * 0.08);
     for (let i = 0; i < m; i++) {
       const w = this.water.sample(pts[i * 2], pts[i * 2 + 1]);
       req[i] = Math.max(ground[i] + (br.boardwalk ? 0.4 : 1.0), w.mask > 0.3 ? w.level + clear : -Infinity);
@@ -795,6 +904,7 @@ export class Town {
     if (br.k === 'road') this.decks.add({ pts: new Float32Array(pts), y, half });
 
     const out = this.builder(mx, mz);
+    if (br.levee) return this.embankment(out, pts, y, half);
     const name = `${br.n} ${br.loc}`;
     const modern = /twin cities/i.test(name);
     const tenth = /pow\/mia|10th/i.test(name);

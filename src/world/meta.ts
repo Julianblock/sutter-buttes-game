@@ -52,6 +52,8 @@ export interface TownBridge {
   layer: number;
   boardwalk: number;
   pts: number[];
+  /** Road on a levee crest beside the water: an earth embankment rather than a deck on piers. */
+  levee?: boolean;
 }
 
 export interface TownData {
