@@ -462,7 +462,7 @@ export class Town {
       this.flatRoof(out, ring, top, roofCol, roofStyle);
     } else {
       const o = obb(ring);
-      this.pitchedRoof(out, o, top, roofForm === ROOF.HIP, roofCol, roofStyle, wall, style, yG, 0.45, b.cp ? 24 : 32);
+      this.pitchedRoof(out, o, top, roofForm === ROOF.HIP, roofCol, roofStyle, wall, style, yG, 0.45, b.cp ? 24 : b.k === K.HOUSE ? 42 : 32);
     }
 
     if (b.id === 'state') this.marquee(out, ring, yG);
