@@ -557,11 +557,54 @@ kbd {
 }
 
 /* ---------- Sound toggle ---------- */
-.sound-btn {
+.sound-ctl {
   position: fixed;
   top: 18px;
   right: 18px;
   z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+.sound-ctl .volume {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent) var(--fill, 90%), rgba(255, 255, 255, 0.2) var(--fill, 90%));
+  cursor: pointer;
+  outline: none;
+}
+.sound-ctl .volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: none;
+}
+.sound-ctl .volume::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: none;
+}
+.sound-ctl .sound-btn {
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.sound-btn {
   width: 40px;
   height: 40px;
   display: grid;
@@ -868,7 +911,7 @@ body.touch .help .box {
 body.touch .discovery {
   top: max(14px, env(safe-area-inset-top));
 }
-body.touch .sound-btn {
+body.touch .sound-ctl {
   top: max(14px, env(safe-area-inset-top));
   right: max(14px, env(safe-area-inset-right));
 }

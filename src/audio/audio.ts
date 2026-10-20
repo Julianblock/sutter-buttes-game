@@ -306,6 +306,12 @@ export class SoundScape {
     if (this.ctx) this.master.gain.setTargetAtTime(m ? 0 : this.volume, this.ctx.currentTime, 0.1);
   }
 
+  /** Master volume 0..1, on a squared curve so the low end of a slider stays usable. */
+  setVolume(v: number) {
+    this.volume = Math.max(0, Math.min(1, v)) ** 2;
+    if (this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.05);
+  }
+
   private panner(pan: number, dest: AudioNode = this.ambience) {
     const ctx = this.ctx!;
     const p = ctx.createStereoPanner();

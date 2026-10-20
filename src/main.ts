@@ -330,7 +330,34 @@ async function boot() {
     muteBtn.blur();
     canvas.focus();
   };
-  ui.append(muteBtn);
+  const volume = document.createElement('input');
+  volume.type = 'range';
+  volume.min = '0';
+  volume.max = '100';
+  volume.className = 'volume';
+  volume.title = 'Volume';
+  volume.value = localStorage.getItem('sb-volume') ?? '90';
+  const applyVolume = () => {
+    const v = Number(volume.value) / 100;
+    sound.setVolume(v);
+    volume.style.setProperty('--fill', `${volume.value}%`);
+    localStorage.setItem('sb-volume', volume.value);
+    if (v > 0 && sound.muted) setMuted(false);
+  };
+  applyVolume();
+  volume.oninput = () => {
+    sound.start();
+    applyVolume();
+  };
+  for (const ev of ['pointerdown', 'keydown'] as const) volume.addEventListener(ev, (e) => e.stopPropagation());
+  volume.onchange = () => {
+    volume.blur();
+    canvas.focus();
+  };
+  const soundCtl = document.createElement('div');
+  soundCtl.className = 'sound-ctl';
+  soundCtl.append(volume, muteBtn);
+  ui.append(soundCtl);
   const wake = () => sound.start();
   addEventListener('pointerdown', wake);
   addEventListener('keydown', wake);
