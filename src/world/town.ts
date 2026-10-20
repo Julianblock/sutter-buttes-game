@@ -624,6 +624,10 @@ export class Town {
         out.box(x, z, base, 0.9, 0.9, h * 0.82 + 0.4, o.ang, white, STYLE.STUCCO);
         const [x2, z2] = P(u, side * (o.d / 2 + 0.25));
         out.box(x2, z2, yG + h * 0.82, 0.8, 0.5, 1.2, o.ang, white, STYLE.STUCCO);
+        // Pinnacle rising past the eaves.
+        const [x3, z3] = P(u, side * (o.d / 2 + 0.1));
+        out.box(x3, z3, yG + h - 0.2, 0.55, 0.55, 1.2, o.ang, white, STYLE.STUCCO);
+        out.prism(x3, z3, yG + h + 1.0, 0.36, 0, 2.4, 4, white, STYLE.SPIRE, o.ang + Math.PI / 4);
       }
     }
     // Tower centred on the front, projecting from the facade.
@@ -642,6 +646,11 @@ export class Town {
     }
     const spireBase = yG + t1 + belfry;
     out.box(tx, tz, spireBase, bw + 0.5, bw + 0.5, 0.5, o.ang, white, STYLE.STUCCO);
+    // Corner pinnacles ringing the spire.
+    for (const [du, dv] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const ox = (du * c - dv * s) * (bw / 2), oz = (du * s + dv * c) * (bw / 2);
+      out.prism(tx + ox, tz + oz, spireBase + 0.5, 0.42, 0, 3.6, 4, white, STYLE.SPIRE, o.ang + Math.PI / 4);
+    }
     const top = yG + 30.5;
     out.prism(tx, tz, spireBase + 0.5, bw * 0.62, 0, top - spireBase - 0.5, 8, rgb('#f6f6f2'), STYLE.SPIRE, o.ang + Math.PI / 8);
     out.box(tx, tz, top - 0.2, 0.12, 0.12, 1.6, o.ang, rgb('#c9a84a'), STYLE.STEEL, true);
@@ -668,6 +677,20 @@ export class Town {
     const f0 = [0, 0, 0, 0];
     out.quad(d0, d1, d2, d3, door, STYLE.RAILING, f0, f0, f0, f0, [fx, 0, fz]);
     out.tri(d3, d2, [wx, yG + 4.9, wz], door, STYLE.RAILING, f0, f0, f0, [fx, 0, fz]);
+    // Clock on the belfry front: a cream dial with a dark rim and hands.
+    const cx0 = tx + fx * (tw / 2 + 0.06), cz0 = tz + fz * (tw / 2 + 0.06);
+    const cy = yG + t1 - 1.6;
+    const ring2 = (r: number, a: number): V3 => [cx0 + lx * Math.cos(a) * r, cy + Math.sin(a) * r, cz0 + lz * Math.cos(a) * r];
+    const dial = rgb('#f3ead2'), rim = rgb('#1f1d1b');
+    const n: V3 = [fx, 0, fz];
+    for (let k = 0; k < 24; k++) {
+      const a0 = (k / 24) * Math.PI * 2, a1 = ((k + 1) / 24) * Math.PI * 2;
+      out.quad(ring2(1.05, a0), ring2(1.25, a0), ring2(1.25, a1), ring2(1.05, a1), rim, STYLE.STEEL, f0, f0, f0, f0, n);
+      out.tri([cx0, cy, cz0], ring2(1.05, a0), ring2(1.05, a1), dial, STYLE.STUCCO, f0, f0, f0, n);
+    }
+    const hx = cx0 + fx * 0.05, hz = cz0 + fz * 0.05;
+    out.beam([hx, cy, hz], [hx + lx * 0.5, cy + 0.45, hz + lz * 0.5], 0.08, 0.04, rim, STYLE.STEEL);
+    out.beam([hx, cy, hz], [hx - lx * 0.15, cy + 0.85, hz - lz * 0.15], 0.06, 0.04, rim, STYLE.STEEL);
     // Floodlights on the steeple.
     for (const e of [-1, 1]) this.lights.push(wx + fx * 4 + lx * e * 3, yG + 0.6, wz + fz * 4 + lz * e * 3, 0.95, 0.95, 1, 0.8, 0);
   }
