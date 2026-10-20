@@ -35,6 +35,9 @@ const CORE = [
 // The old residential grid north of downtown, full of two-storey Victorians.
 const OLD_TOWN = { x0: 18900, x1: 19950, z0: 5900, z1: 7060 };
 
+// Marysville High School grounds (OSM way 1056310333); its buildings are unnamed.
+const MHS = [[19994, 5617], [19685, 5649], [19675, 5640], [19662, 5525], [19615, 5530], [19610, 5527], [19601, 5441], [19580, 5358], [19549, 5274], [19549, 5264], [19578, 5228], [19578, 5208], [19572, 5142], [19578, 5106], [19590, 5082], [19729, 4891], [19758, 4867], [19775, 4862], [19846, 4854], [19866, 4875], [19868, 4896], [19879, 4953], [19922, 4944], [19930, 5020]];
+
 const NAME_FIX = { 'Abandon Marysville Hotel': 'Hotel Marysville' };
 const LANDMARKS = [
   { id: 'stjoseph', re: /saint joseph catholic/i },
@@ -310,6 +313,7 @@ out geom;`,
     if (lm) rec.id = lm.id;
     if (tags['building:colour']) rec.c = tags['building:colour'];
     if (inside(CORE, cx, cz)) rec.d = 1;
+    if (inside(MHS, cx, cz)) rec.cp = 'mhs';
     buildings.push(rec);
   }
 

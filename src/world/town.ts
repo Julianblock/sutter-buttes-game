@@ -149,6 +149,12 @@ function faceNormal(a: V3, b: V3, c: V3): V3 {
   return norm(cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]));
 }
 
+function area(ring: [number, number][]) {
+  let a = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) a += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+  return Math.abs(a) / 2;
+}
+
 function ringOf(b: TownBuilding): [number, number][] {
   const r: [number, number][] = [];
   for (let i = 0; i < b.p.length; i += 2) r.push([b.p[i], b.p[i + 1]]);
@@ -415,6 +421,25 @@ export class Town {
         storey = 3.0;
     }
     if (b.c) wall = rgb(b.c);
+    // Marysville High: red brick halls under red clay tile.
+    let h = b.h;
+    let roofForm = b.r;
+    if (b.cp === 'mhs') {
+      wall = pick(['#b06650', '#b86e56', '#a55f4a'], s);
+      style = STYLE.SCHOOL;
+      storey = 4.0;
+      parapet = 0;
+      h = Math.max(1, b.l) * 4.0 + 0.8;
+      const o = obb(ring);
+      if (o.w * o.d > 350 && area(ring) > o.w * o.d * 0.85) {
+        roofForm = ROOF.HIP;
+        roofCol = rgb('#a6472c');
+        roofStyle = STYLE.ROOF_TILE;
+      } else {
+        roofCol = pick(FLAT, s * 5);
+        roofStyle = STYLE.ROOF_FLAT;
+      }
+    }
 
     if (b.k === K.CANOPY) {
       const o = obb(ring);
@@ -430,13 +455,13 @@ export class Town {
     }
 
     const levels = Math.max(1, b.l);
-    const top = yG + b.h;
+    const top = yG + h;
     this.walls(out, ring, base, top + parapet, yG, wall, style, storey, levels);
-    if (b.r === ROOF.FLAT || b.k === K.COMMERCIAL) {
+    if (roofForm === ROOF.FLAT || b.k === K.COMMERCIAL) {
       this.flatRoof(out, ring, top, roofCol, roofStyle);
     } else {
       const o = obb(ring);
-      this.pitchedRoof(out, o, top, b.r === ROOF.HIP, roofCol, roofStyle, wall, style, yG, 0.45, 32);
+      this.pitchedRoof(out, o, top, roofForm === ROOF.HIP, roofCol, roofStyle, wall, style, yG, 0.45, b.cp ? 24 : 32);
     }
 
     if (b.id === 'state') this.marquee(out, ring, yG);

@@ -40,6 +40,8 @@ export interface TownBuilding {
   c?: string;
   /** Inside the historic downtown core. */
   d?: number;
+  /** Campus the building belongs to ('mhs': Marysville High School). */
+  cp?: string;
 }
 
 export interface TownBridge {

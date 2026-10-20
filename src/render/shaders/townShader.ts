@@ -20,6 +20,7 @@ export const STYLE = {
   SPIRE: 15,
   SIDING: 16, // painted lap siding on houses
   HOTEL: 17, // concrete hotel: regular window grid
+  SCHOOL: 18, // Marysville High: brick with arched windows on every floor
 } as const;
 
 export const townVertex = /* glsl */ `
@@ -115,16 +116,18 @@ void main() {
         albedo = vec3(0.6) * 0.55; // sill
       }
     }
-  } else if (style < 1.5) {
+  } else if (style < 1.5 || style > 17.5) {
     // Gold Rush brick: shopfronts, tall sash windows above, corbelled cornice.
-    float top = 4.8 + (storeys - 1.0) * 4.0;
+    // The school is the same brick with arched windows from the ground up.
+    bool school = style > 17.5;
+    float top = school ? 0.6 + storeys * 4.0 : 4.8 + (storeys - 1.0) * 4.0;
     float by = v / 0.077;
     float bx = u / 0.21 + 0.5 * mod(floor(by), 2.0);
     float mortar = max(step(0.86, fract(by)), step(0.93, fract(bx))) * smoothstep(0.05, 0.015, fp);
     albedo *= 0.9 + 0.2 * hash12(floor(vec2(bx, by))) * smoothstep(0.08, 0.03, fp);
     albedo = mix(albedo, vec3(0.42, 0.40, 0.36) * 0.55, mortar * 0.6);
     if (wall) {
-      if (v < 4.2) {
+      if (v < 4.2 && !school) {
         // Shopfront bays between brick piers, with transoms above the doors.
         float bay = fract(u / 6.2);
         bool pier = bay < 0.07 || bay > 0.93;
@@ -147,14 +150,15 @@ void main() {
           emit += neon * neonBand * night * 2.4 * flick;
         }
       } else if (v < top - 0.3) {
-        float up = v - 4.2;
+        float up = v - (school ? 0.6 : 4.2);
+        float rows = school ? storeys : storeys - 1.0;
         vec2 cell = vec2(u / 2.6, up / 4.0);
         vec2 f = fract(cell);
         vec2 id = floor(cell);
-        bool win = f.x > 0.28 && f.x < 0.72 && f.y > 0.18 && f.y < 0.82 && id.y < storeys - 1.0;
+        bool win = up > 0.0 && f.x > 0.28 && f.x < 0.72 && f.y > 0.18 && f.y < 0.82 && id.y < rows;
         // Segmental arches over the sash windows.
         float arch = f.y - 0.82 - 0.06 * (1.0 - pow((f.x - 0.5) / 0.22, 2.0));
-        if (win || (f.x > 0.28 && f.x < 0.72 && arch < 0.0 && f.y > 0.8 && id.y < storeys - 1.0)) {
+        if (win || (up > 0.0 && f.x > 0.28 && f.x < 0.72 && arch < 0.0 && f.y > 0.8 && id.y < rows)) {
           albedo = vec3(0.035, 0.04, 0.05);
           rough = 0.12;
           float lit = step(0.6, hash12(id + cellSeed * 1.7));
