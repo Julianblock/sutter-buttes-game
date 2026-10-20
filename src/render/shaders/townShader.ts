@@ -100,19 +100,22 @@ void main() {
     if (style > 15.5 && style < 16.5) albedo *= 1.0 - 0.12 * smoothstep(0.75, 0.95, fract(v / 0.2)) * smoothstep(0.12, 0.04, fp);
     if (wall && storey > 0.0) {
       bool hotel = style > 16.5;
-      float spacing = hotel ? 2.4 : 3.3;
+      bool siding = style > 15.5 && style < 16.5;
+      float spacing = hotel ? 2.4 : siding ? 2.6 : 3.3;
       vec2 cell = vec2(u / spacing, v / storey);
       vec2 f = fract(cell);
       vec2 id = floor(cell);
-      float w0 = hotel ? 0.28 : 0.3, w1 = hotel ? 0.72 : 0.7;
-      bool win = f.x > w0 && f.x < w1 && f.y > 0.3 && f.y < 0.8 && id.y < storeys && v > 0.6;
+      // Siding houses get tall, narrow Victorian sashes.
+      float w0 = hotel ? 0.28 : siding ? 0.36 : 0.3, w1 = hotel ? 0.72 : siding ? 0.64 : 0.7;
+      float y0 = siding ? 0.22 : 0.3, y1 = siding ? 0.84 : 0.8;
+      bool win = f.x > w0 && f.x < w1 && f.y > y0 && f.y < y1 && id.y < storeys && v > 0.6;
       if (win) {
         albedo = vec3(0.035, 0.045, 0.055);
         rough = 0.15;
         float lit = step(hotel ? 0.8 : 0.62, hash12(id + cellSeed * 3.1));
         emit = roomLight(id + cellSeed) * roomLight(id) * lit * night * 0.5;
         if (lit > 0.5) albedo *= 0.2;
-      } else if (f.y > 0.26 && f.y < 0.3 && f.x > w0 - 0.04 && f.x < w1 + 0.04 && id.y < storeys) {
+      } else if (f.y > y0 - 0.04 && f.y < y0 && f.x > w0 - 0.04 && f.x < w1 + 0.04 && id.y < storeys) {
         albedo = vec3(0.6) * 0.55; // sill
       }
     }
