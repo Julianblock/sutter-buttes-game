@@ -212,7 +212,7 @@ export class Water {
 
   /** Compact lakes and ponds; long river polygons are left to the centrelines. */
   private planPonds(world: WorldData) {
-    const out: { pts: number[]; level: number; depth: number; name: string; big: boolean; minX: number; maxX: number; minZ: number; maxZ: number }[] = [];
+    const out: { pts: number[]; holes?: number[][]; level: number; depth: number; name: string; big: boolean; minX: number; maxX: number; minZ: number; maxZ: number }[] = [];
     const half = this.size / 2 - 200;
     for (const a of world.osm.waterAreas) {
       const n = a.name.toLowerCase();
@@ -231,7 +231,7 @@ export class Water {
       for (let i = 0; i < p.length; i += 2) hs.push(this.hf.height(p[i], p[i + 1]));
       hs.sort((x, y) => x - y);
       const level = hs[Math.floor(hs.length * 0.2)] - 0.3;
-      out.push({ pts: p, level, depth: Math.min(4, 1 + ext * 0.01), name: a.name, big: ext > 150, minX, maxX, minZ, maxZ });
+      out.push({ pts: p, holes: a.holes, level, depth: Math.min(4, 1 + ext * 0.01), name: a.name, big: ext > 150, minX, maxX, minZ, maxZ });
     }
     return out;
   }
@@ -293,18 +293,24 @@ export class Water {
     }
   }
 
-  private pondDist(p: { pts: number[] }, x: number, z: number): number {
-    const a = p.pts;
-    let inside = false;
-    let best = Infinity;
-    for (let i = 0, j = a.length - 2; i < a.length; j = i, i += 2) {
-      const xi = a[i], zi = a[i + 1], xj = a[j], zj = a[j + 1];
-      if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
-      const ex = xj - xi, ez = zj - zi;
-      const t = Math.max(0, Math.min(1, ((x - xi) * ex + (z - zi) * ez) / (ex * ex + ez * ez || 1)));
-      best = Math.min(best, Math.hypot(x - xi - ex * t, z - zi - ez * t));
-    }
-    return inside ? best : -best;
+  /** Signed distance into the pond (negative outside it or on one of its islands). */
+  private pondDist(p: { pts: number[]; holes?: number[][] }, x: number, z: number): number {
+    const ring = (a: number[]) => {
+      let inside = false;
+      let best = Infinity;
+      for (let i = 0, j = a.length - 2; i < a.length; j = i, i += 2) {
+        const xi = a[i], zi = a[i + 1], xj = a[j], zj = a[j + 1];
+        if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+        const ex = xj - xi, ez = zj - zi;
+        const t = Math.max(0, Math.min(1, ((x - xi) * ex + (z - zi) * ez) / (ex * ex + ez * ez || 1)));
+        best = Math.min(best, Math.hypot(x - xi - ex * t, z - zi - ez * t));
+      }
+      return inside ? best : -best;
+    };
+    let d = ring(p.pts);
+    if (d <= 0 || !p.holes) return d;
+    for (const h of p.holes) d = Math.min(d, -ring(h));
+    return d;
   }
 
   private carvePond(g: HeightGrid, p: { pts: number[]; level: number; depth: number; minX: number; maxX: number; minZ: number; maxZ: number }, nearRoad: (x: number, z: number) => boolean) {

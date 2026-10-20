@@ -103,7 +103,8 @@ export interface OsmRoad {
 export interface OsmData {
   roads: OsmRoad[];
   waterways: { name: string; kind: string; pts: number[] }[];
-  waterAreas: { name: string; pts: number[] }[];
+  /** Lakes and ponds; `holes` are islands inside a multipolygon lake. */
+  waterAreas: { name: string; pts: number[]; holes?: number[][] }[];
   buildings: [number, number, number, number, number][];
   power: { pts: number[] }[];
   peaks: { name: string; x: number; z: number; ele: number | null }[];
