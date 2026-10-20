@@ -40,6 +40,8 @@ export interface TownBuilding {
   c?: string;
   /** Inside the historic downtown core. */
   d?: number;
+  /** Campus the building belongs to ('mhs': Marysville High School). */
+  cp?: string;
 }
 
 export interface TownBridge {
@@ -52,6 +54,8 @@ export interface TownBridge {
   layer: number;
   boardwalk: number;
   pts: number[];
+  /** Road on a levee crest beside the water: an earth embankment rather than a deck on piers. */
+  levee?: boolean;
 }
 
 export interface TownData {

@@ -94,6 +94,7 @@ export class Menu {
 
   private render() {
     for (const b of this.tabBar.querySelectorAll('button')) b.classList.toggle('on', b.dataset.tab === this.tab);
+    this.root.classList.toggle('wide', this.tab === 'places');
     const scroll = this.pane.scrollTop;
     this.pane.innerHTML = '';
     switch (this.tab) {
@@ -119,15 +120,20 @@ export class Menu {
         break;
       }
       case 'places':
-        this.renderChoice(
-          DESTINATIONS.map((d) => [d.id, d.label, d.blurb]),
-          this.place ?? '',
-          (id) => {
-            this.place = this.place === id ? null : id;
-            this.render();
-          },
-        );
-        this.pane.append(el('p', 'lede', 'Pick a place, then <b>Take Flight</b> to soar in above it or <b>Drive</b> to start there in the truck.'));
+        this.pane.append(el('p', 'lede places-lede', 'Pick a place, then <b>Take Flight</b> to soar in above it or <b>Drive</b> to start there in the truck.'));
+        for (const group of ['Towns', 'Marysville', 'The Buttes'] as const) {
+          this.pane.append(el('div', 'section-label places-label', group));
+          const grid = el('div', 'grid places');
+          for (const d of DESTINATIONS.filter((x) => x.group === group)) {
+            const c = el('button', `card place-card${d.id === this.place ? ' on' : ''}`, `<b>${d.label}</b><small>${d.blurb}</small>`);
+            c.onclick = () => {
+              this.place = this.place === d.id ? null : d.id;
+              this.render();
+            };
+            grid.append(c);
+          }
+          this.pane.append(grid);
+        }
         break;
       case 'season':
         this.renderChoice(

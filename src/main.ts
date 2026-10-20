@@ -110,9 +110,13 @@ async function boot() {
   const waterSurface = new WaterSurface(terrain);
   engine.scene.add(sky.mesh, terrain.mesh, waterSurface.mesh);
 
+  // Before roads and traffic: the town's bridge decks carry them over the rivers.
+  const town = world.town ? new Town(world.town.data, heightfield, water, world.osm) : null;
+
   loading.progress('Growing the oak woodland', 0.95);
   const treeBuf = await fetch('data/trees.bin').then((r) => r.arrayBuffer());
-  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex, cemeteryPlans.flatMap((p) => p.trees), water);
+  const planted = [...cemeteryPlans.flatMap((p) => p.trees), ...(town?.streetTrees() ?? [])];
+  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex, planted, water);
   engine.scene.add(trees.group);
   const seasonMonth = () => env.month - 1 + (env.day - 1) / 30;
   trees.setSeason(seasonMonth());
@@ -122,13 +126,16 @@ async function boot() {
   engine.scene.add(motes.points);
 
   loading.progress('Raising barns and broadcast towers', 0.97);
-  // Before roads and traffic: the town's bridge decks carry them over the rivers.
-  const town = world.town ? new Town(world.town.data, heightfield, water, world.osm) : null;
   const pedestrians = town ? new Pedestrians(town, world.osm, roadIndex, heightfield, lowPower ? 900 : 2800) : null;
   if (town) engine.scene.add(town.group);
   if (pedestrians) engine.scene.add(pedestrians.mesh);
   const power = new PowerLines(world.osm, heightfield);
-  const props = new Props(world.osm, heightfield, power.pylons, town ? (x, z) => town.covers(x, z) : undefined);
+  // Generic buildings stand down inside the town, and anywhere they'd sit in a river.
+  const inWater = (x: number, z: number) => {
+    const w = water.sample(x, z);
+    return w.mask > 0.5 && w.level > heightfield.height(x, z);
+  };
+  const props = new Props(world.osm, heightfield, power.pylons, (x, z) => !!town?.covers(x, z) || inWater(x, z));
   const lights = new LightPoints([...props.lights, ...(town?.lights ?? [])]);
   engine.scene.add(props.group, lights.points, power.mesh);
   const cemeteries = new Cemeteries(cemeteryPlans, heightfield);
@@ -330,7 +337,34 @@ async function boot() {
     muteBtn.blur();
     canvas.focus();
   };
-  ui.append(muteBtn);
+  const volume = document.createElement('input');
+  volume.type = 'range';
+  volume.min = '0';
+  volume.max = '100';
+  volume.className = 'volume';
+  volume.title = 'Volume';
+  volume.value = localStorage.getItem('sb-volume') ?? '90';
+  const applyVolume = () => {
+    const v = Number(volume.value) / 100;
+    sound.setVolume(v);
+    volume.style.setProperty('--fill', `${volume.value}%`);
+    localStorage.setItem('sb-volume', volume.value);
+    if (v > 0 && sound.muted) setMuted(false);
+  };
+  applyVolume();
+  volume.oninput = () => {
+    sound.start();
+    applyVolume();
+  };
+  for (const ev of ['pointerdown', 'keydown'] as const) volume.addEventListener(ev, (e) => e.stopPropagation());
+  volume.onchange = () => {
+    volume.blur();
+    canvas.focus();
+  };
+  const soundCtl = document.createElement('div');
+  soundCtl.className = 'sound-ctl';
+  soundCtl.append(volume, muteBtn);
+  ui.append(soundCtl);
   const wake = () => sound.start();
   addEventListener('pointerdown', wake);
   addEventListener('keydown', wake);
@@ -347,7 +381,7 @@ async function boot() {
       car.place(x, z, s.psi);
       driveCam.reset();
     } else {
-      player.flight.spawn(x, heightfield.height(x, z) + 45, z, s.psi);
+      player.flight.spawn(x, heightfield.height(x, z) + (s.alt ?? 45), z, s.psi);
       chase.snapFrom(cam, player.object.position);
     }
   };

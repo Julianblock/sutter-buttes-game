@@ -126,6 +126,10 @@
   margin-bottom: -1px;
   transition: color 0.2s, border-color 0.2s;
 }
+.menu.wide .tabs button {
+  font-size: 13px;
+  padding: 13px 14px 14px;
+}
 .tabs button:hover {
   color: var(--ink);
 }
@@ -176,6 +180,38 @@
 }
 .card.wide {
   grid-column: span 2;
+}
+.menu.wide .panel {
+  width: min(820px, 100vw);
+  background: linear-gradient(90deg, rgba(10, 10, 11, 0.88) 0%, rgba(10, 10, 11, 0.78) 80%, rgba(10, 10, 11, 0) 100%);
+}
+.menu .places-lede {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.places-label {
+  font-size: 13px;
+  margin: 18px 0 10px;
+}
+.grid.places {
+  gap: 12px;
+}
+.card.place-card {
+  padding: 18px 20px;
+  min-height: 76px;
+  border-radius: 12px;
+}
+.card.place-card b {
+  font-size: 19px;
+  font-weight: 600;
+}
+.card.place-card small {
+  margin-top: 8px;
+  font: 400 15.5px/1.45 var(--sans);
+  color: rgba(255, 255, 255, 0.72);
+}
+.card.place-card.on b {
+  color: var(--accent);
 }
 .detail {
   margin-top: 18px;
@@ -521,11 +557,54 @@ kbd {
 }
 
 /* ---------- Sound toggle ---------- */
-.sound-btn {
+.sound-ctl {
   position: fixed;
   top: 18px;
   right: 18px;
   z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+.sound-ctl .volume {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent) var(--fill, 90%), rgba(255, 255, 255, 0.2) var(--fill, 90%));
+  cursor: pointer;
+  outline: none;
+}
+.sound-ctl .volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: none;
+}
+.sound-ctl .volume::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: none;
+}
+.sound-ctl .sound-btn {
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.sound-btn {
   width: 40px;
   height: 40px;
   display: grid;
@@ -832,7 +911,7 @@ body.touch .help .box {
 body.touch .discovery {
   top: max(14px, env(safe-area-inset-top));
 }
-body.touch .sound-btn {
+body.touch .sound-ctl {
   top: max(14px, env(safe-area-inset-top));
   right: max(14px, env(safe-area-inset-right));
 }
