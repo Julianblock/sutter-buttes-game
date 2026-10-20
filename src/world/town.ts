@@ -467,6 +467,7 @@ export class Town {
 
     if (b.id === 'state') this.marquee(out, ring, yG);
     if (b.id === 'hotel') this.hotelTower(out, ring, yG, wall);
+    if (b.k === K.HOUSE && area(ring) < 350 && hash(s * 91.7) < 0.8) this.porch(out, ring, yG, roofCol);
     if (b.k === K.COMMERCIAL && b.d && s > 0.55) this.awning(out, ring, yG, s);
   }
 
@@ -551,6 +552,36 @@ export class Town {
         out.box(x, z, yG + k * storey, 1.0, 2.6, 0.18, ang, wall, STYLE.CONCRETE);
         out.box(x + du * c * 0.45, z + du * s * 0.45, yG + k * storey + 0.18, 0.06, 2.6, 0.9, ang, rail, STYLE.RAILING);
       }
+    }
+  }
+
+  /** Front porch on a house: raised deck, turned posts, railing and a shed roof. */
+  private porch(out: Builder, ring: [number, number][], yG: number, roofCol: RGB) {
+    const e = this.streetEdge(ring);
+    if (!e) return;
+    const [a, c, n] = e;
+    const l = Math.hypot(c[0] - a[0], c[1] - a[1]);
+    if (l < 5) return;
+    const span = Math.min(l - 0.8, 9), dep = 2.2;
+    const tx = (c[0] - a[0]) / l, tz = (c[1] - a[1]) / l;
+    const ang = Math.atan2(tz, tx);
+    const mx = (a[0] + c[0]) / 2, mz = (a[1] + c[1]) / 2;
+    const px = mx + n[0] * dep * 0.5, pz = mz + n[2] * dep * 0.5;
+    const trim = rgb('#f4f1ea');
+    const deck = yG + 0.6, eave = yG + 3.1;
+    out.box(px, pz, yG - 0.3, span, dep, 0.9, ang, rgb('#cfc8bb'), STYLE.STUCCO);
+    out.box(px + n[0] * 0.15, pz + n[2] * 0.15, eave, span + 0.3, dep + 0.3, 0.16, ang, roofCol, STYLE.ROOF_SHINGLE);
+    const posts = Math.max(2, Math.round(span / 2.4) + 1);
+    for (let i = 0; i < posts; i++) {
+      const u = (i / (posts - 1) - 0.5) * (span - 0.3);
+      const x = mx + tx * u + n[0] * (dep - 0.15), z = mz + tz * u + n[2] * (dep - 0.15);
+      out.box(x, z, deck, 0.16, 0.16, eave - deck, ang, trim, STYLE.STUCCO, false);
+    }
+    const fx = mx + n[0] * (dep - 0.15), fz = mz + n[2] * (dep - 0.15);
+    for (const side of [-1, 1]) {
+      const u = side * (span * 0.3 + 0.5);
+      out.box(fx + tx * u, fz + tz * u, deck + 0.85, span * 0.4 - 0.6, 0.08, 0.08, ang, trim, STYLE.STUCCO, false);
+      out.box(fx + tx * u, fz + tz * u, deck + 0.1, span * 0.4 - 0.6, 0.04, 0.75, ang, trim, STYLE.RAILING, false);
     }
   }
 
