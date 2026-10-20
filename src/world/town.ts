@@ -27,7 +27,8 @@ const pick = (list: string[], s: number) => rgb(list[Math.floor(s * list.length)
 
 // Paint and materials seen around town: Victorian and bungalow paint, Gold Rush
 // brick (some painted over), stucco on the 1920s–60s blocks.
-const HOUSE = ['#efe9dc', '#e8dcc0', '#d9d2c3', '#c9d3d6', '#b9c4b0', '#e6d5a8', '#d8c3a5', '#f2efe8', '#a9b8c4', '#cfc0a8', '#dcc9b4'];
+// Painted Victorian siding: whites, creams and pastels.
+const HOUSE = ['#f4f1e8', '#cfe0ea', '#d8e8cf', '#f2e3a6', '#efd3cc', '#c9d8bd', '#e6d4b2', '#bccddb', '#f3e8cf', '#ddcbe0', '#acc9b8', '#f6f4ee'];
 const BRICK = ['#8a4b38', '#7c4332', '#94553d', '#6f3d2e', '#9b5e45'];
 const PAINTED = ['#d8cdb8', '#c9c1a8', '#b3c1b0', '#e2d6c0', '#cdb79a'];
 const MODERN = ['#d6cfc2', '#c8c4bc', '#b8b4ac', '#e0dcd2', '#a8a49c', '#cbbfa8'];
