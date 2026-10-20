@@ -196,8 +196,8 @@ const steps = {
     console.log(`  ${tagged} buildings with mapped heights, ${town.buildings.filter((b) => b.id).map((b) => b.id).join(', ')}`);
     await fs.writeFile(path.join(OUT, 'marysville.json'), JSON.stringify(town));
 
-    // Full-resolution orthophoto over town (USGS tops out at z16 here, ~1.7 m per pixel).
-    const res = 3072;
+    // Orthophoto over both towns (USGS tops out at z16 here, ~1.7 m per pixel).
+    const res = 4096;
     const sample = await buildMosaic('usgsImagery', 16, TOWN.size * 1.02, TOWN.x, TOWN.z);
     const raw = Buffer.alloc(res * res * 3);
     const rgb = [0, 0, 0];

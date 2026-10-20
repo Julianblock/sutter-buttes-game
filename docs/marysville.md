@@ -8,27 +8,41 @@ Fly east from the Buttes, or pick **Downtown Marysville**, **Twin Cities Memoria
 
 ## What's there
 
-**Every building.** The town covers a 5.2 km square centred on downtown, taking in the old town, the east side of Yuba City and both river crossings. Each of its roughly 5,500 OpenStreetMap buildings is extruded from its own footprint. About a hundred buildings have heights or storeys tagged by mappers, and those are used as given. Everywhere else, height, storeys, roof shape and material are estimated from the building type, footprint size and whether it stands in the Gold Rush blocks:
+**Every building.** The town covers a 9.4 km square that takes in Marysville, all of Yuba City across the Feather and every river crossing between them. Each of its roughly 19,000 OpenStreetMap buildings is extruded from its own footprint. About a hundred buildings have heights or storeys tagged by mappers, and those are used as given. Everywhere else, height, storeys, roof shape and material are estimated from the building type, footprint size and whether it stands in the Gold Rush blocks:
 
 | Type | Treatment |
 | --- | --- |
 | Downtown commercial | Brick fronts with mortar courses, lit shopfronts between brick piers, signboards (some with neon), segmental-arched sash windows and a corbelled cornice. Awnings on the street side. |
 | Stores, offices | Glass band at street level, plain panels above |
-| Houses | One storey on raised floors (two for some old-town Victorians), gable or hip roofs in shingle, tile or metal, stucco or lap siding |
+| Houses | One storey on raised floors (two for some old-town Victorians), steep 42° gable or hip roofs, lap siding in Victorian whites, creams and pastels, tall narrow sash windows, and a front porch with posts and railings on the street side |
 | Apartments, hotels | Punched windows on a storey grid, lit rooms at night |
 | Industrial, sheds | Metal and concrete, low pitched roofs |
 | Canopies | Fuel-station and loading canopies on posts |
 
 **Landmarks** are built by hand on their real footprints:
 
-- **St. Joseph Church** (cornerstone 1855). A white nave with 5 m lancet bays and buttresses under a steep gable, and a front tower facing C Street. The tower carries a louvred belfry and an octagonal spire to 30.5 m (100 ft) with a gold cross, above a rose window and a pointed door. The stained glass glows at night and the spire is floodlit.
+- **St. Joseph Church** (cornerstone 1855). A white nave with 5 m lancet bays under a steep gable, with a pinnacle on every buttress. The front tower faces C Street. It carries a clock, a louvred belfry and an octagonal spire to 30.5 m (100 ft) with a gold cross, ringed by four corner pinnacles, above a rose window and a pointed door. The stained glass glows at night and the spire is floodlit.
 - **Bok Kai Temple** (1880) on the levee at the foot of D Street: white walls, a double clay-tile roof and a red-columned porch with lanterns.
 - **State Theatre**, with its marquee lit by bulbs.
-- **Hotel Marysville**, the Yuba County Courthouse, the Chinese American Museum and the Mary Aaron Museum, named and placed where OSM maps them.
+- **Hotel Marysville** (1927): cream walls, with a seven-storey tower over the centre bay capped by a red clay-tile pyramid and balconies stacked at its corners.
+- **Marysville High School**: every building on the campus (OSM way 1056310333) is red brick with arched windows on each floor, and the larger halls carry red clay-tile hip roofs.
+- The Yuba County Courthouse, the Chinese American Museum and the Mary Aaron Museum, named and placed where OSM maps them.
 
 ![St. Joseph Church on C Street](screenshots/marysville/st-joseph.jpg)
 
 ![Bok Kai Temple on the levee](screenshots/marysville/bok-kai.jpg)
+
+![Hotel Marysville's tower over D Street](screenshots/marysville/hotel-marysville.jpg)
+
+![Marysville High School](screenshots/marysville/high-school.jpg)
+
+**Streets and Ellis Lake.** Residential streets are lined with shade trees (valley oaks and sycamore-like cottonwoods) in the parkway strip, spaced about 11 m apart and kept clear of walls, porches, the water and other streets. Downtown stays bare. Ellis Lake is real water with its islands. It is mapped as a multipolygon, which the valley data didn't read before.
+
+![The Victorian blocks north of downtown](screenshots/marysville/victorians.jpg)
+
+![Ellis Lake](screenshots/marysville/ellis-lake.jpg)
+
+![Yuba City](screenshots/marysville/yuba-city.jpg)
 
 **Bridges.** On `main`, roads across the rivers were draped on the terrain, so they ran along the riverbed under the water. Now every mapped road, rail and foot bridge is built as a deck on piers:
 
@@ -37,13 +51,15 @@ Fly east from the Buttes, or pick **Downtown Marysville**, **Twin Cities Memoria
 - **Tenth Street / POW/MIA Bridge** (CA 20, 1947): 49 m spans with sodium lamps.
 - **E Street Bridge** (CA 70) over the Yuba, plus the Union Pacific rail bridges and the smaller footbridges and boardwalks.
 
-Each deck runs level between its abutments and lifts to clear the water (6.5 m for road and rail, 3 m for footbridges), then it is smoothed and blended into the approaches. Road bridges are registered with the terrain so that road ribbons, traffic and the truck ride on the deck rather than dropping to the riverbed. The truck no longer counts as underwater while it is on a bridge.
+Each deck runs level at levee height. Its abutments sit on the highest dry ground within 60 m of each end, and it clears the river by 10 m (8.5 m for the old interurban trusses, 3.5 m for footbridges). Ramps run down to the ground beyond the levees, and ways that OSM splits mid-river are joined first so the deck doesn't dip.
+
+Outside town, every other road in the valley that crosses mapped water gets the same treatment. Where it crosses a river or slough it becomes a bridge, and where it runs along the water (a levee road) it becomes a raised embankment. Road bridges are registered with the terrain so that road ribbons, traffic and the truck ride on the deck rather than dropping to the riverbed. The truck no longer counts as underwater while it is on a bridge.
 
 ![The Northern Electric truss bridge beside the new Fifth Street bridge](screenshots/marysville/northern-electric-truss.jpg)
 
 ![E Street bridge over the Yuba](screenshots/marysville/e-street-bridge.jpg)
 
-**Imagery.** A 3072 px USGS mosaic (about 1.7 m per pixel) is draped over the town, so streets, yards, parking lots and Ellis Lake read correctly from the air. It replaces the coarse mid-range imagery there, and the procedural farmland detail fades out inside town.
+**Imagery.** A 4096 px USGS mosaic (about 2.3 m per pixel) is draped over the town, so streets, yards, parking lots and Ellis Lake read correctly from the air. It replaces the coarse mid-range imagery there, and the procedural farmland detail fades out inside town.
 
 **Saturday night.** Downtown is busy after dark. Up to 2,800 people (900 on phones) walk the sidewalks along the building line and the mapped footpaths. Most of them are on the downtown blocks, and small groups stand outside the bars, restaurants, the theatre and the hotel. The crowd follows the clock:
 
@@ -77,12 +93,12 @@ People are simple low-poly figures with a walk cycle, in a mix of skin tones, ha
 
 `npm run data` has a new `marysville` step (`scripts/lib/marysville.mjs`):
 
-1. **Overpass query** for the town square, cached in `.cache/osm/marysville.json`. It fetches building ways and multipolygon outer rings, highway and railway bridges, `man_made=bridge` outlines (these carry names like "Twin Cities Memorial Bridge"), footways, and amenity, tourism and historic points.
+1. **Overpass query** for the town square, cached in `.cache/osm/marysville_9400.json`. It fetches building ways and multipolygon outer rings, highway and railway bridges, `man_made=bridge` outlines (these carry names like "Twin Cities Memorial Bridge"), footways, and amenity, tourism and historic points.
 2. **Classify** each building into one of eleven kinds (house, commercial, retail, apartments, civic, industrial, shed, canopy, church, temple, hotel) from its `building`, `amenity`, `shop` and `name` tags. Names from points inside a footprint are attached to that building, so the State Theatre and Hotel Marysville get their names.
 3. **Massing.** Use the tagged `height` or `building:levels` where present, otherwise estimate by kind. An oriented bounding box picks gable or hip roofs for simple footprints.
-4. **Landmarks** are matched by name (St. Joseph, Bok Kai, the State Theatre and so on) and flagged for the hand-built models.
+4. **Landmarks** are matched by name (St. Joseph, Bok Kai, the State Theatre and so on) and flagged for the hand-built models. Buildings inside the Marysville High School grounds are tagged `cp: 'mhs'`.
 5. **Bridges** are classified as road, rail, abandoned rail or foot, with widths from lanes and type.
-6. **Output** goes to `public/data/marysville.json` (751 KB), and the USGS mosaic to `public/data/imagery_marysville.jpg`. `meta.json` gains a `town` entry, which is what makes the game load the town.
+6. **Output** goes to `public/data/marysville.json` (2.7 MB), and the USGS mosaic to `public/data/imagery_marysville.jpg`. `meta.json` gains a `town` entry, which is what makes the game load the town.
 
 USGS imagery tops out at zoom 16 for this area. Zoom 17 returns 404s.
 
@@ -90,11 +106,13 @@ USGS imagery tops out at zoom 16 for this area. Zoom 17 returns 404s.
 
 | File | Role |
 | --- | --- |
-| `src/world/town.ts` | Builds the buildings, landmarks and bridges. Geometry is merged into 600 m chunks that cast shadows and are hidden beyond 12 km. It also exposes landmark positions, the town zone and a building frontage ray cast. |
+| `src/world/town.ts` | Builds the buildings, landmarks, bridges and street trees. Geometry is merged into 600 m chunks that cast shadows and are drawn within 6 km. Beyond that the orthophoto carries the town. It also exposes landmark positions, the town zone and a building frontage ray cast. |
 | `src/render/shaders/townShader.ts` | Procedural facades: brick, shopfronts, neon, sash windows, lancets, the rose window, roof materials, concrete and steel |
 | `src/world/decks.ts` | Spatial index of bridge decks. `Heightfield.roadHeight()` returns the deck height when you travel along a deck. |
 | `src/life/pedestrians.ts` | Instanced crowd with a GPU walk cycle, sidewalk paths and an hourly activity curve |
-| `src/world/props.ts` | Generic OSM houses stand down inside the town zone. Streetlights stay. |
+| `src/world/props.ts` | Generic OSM houses stand down inside the town zone, and anywhere they would sit in a river. Streetlights stay. |
+| `src/world/water.ts`, `scripts/lib/osm.mjs` | Multipolygon lakes (Ellis Lake) with their islands |
+| `src/veg/trees.ts` | Planted trees outside the imagery zone join the outer tiles as they grow |
 | `src/world/roads.ts`, `src/life/traffic.ts`, `src/vehicle/car.ts` | Use `roadHeight()` so ribbons, cars and the truck follow bridge decks |
 | `src/render/shaders/terrainShader.ts` | Blends the town imagery in |
 | `src/world/destinations.ts`, `places.ts`, `lore.ts` | Places menu entries, HUD place names and discovery cards |

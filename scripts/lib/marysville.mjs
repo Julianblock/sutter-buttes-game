@@ -5,9 +5,13 @@ import path from 'node:path';
 import { latLonToLocal, localToLatLon } from './geo.mjs';
 import { overpass } from './osm.mjs';
 
-/** Square zone (m) over Marysville, the Feather River bridges and Ellis Lake. */
+/**
+ * Square zone (m) over Marysville, the Feather River bridges and Ellis Lake,
+ * reaching west across the river to take in all of Yuba City.
+ */
 const CENTER = { lat: 39.144, lon: -121.5895 };
-export const TOWN = { name: 'Marysville', ...latLonToLocal(CENTER.lat, CENTER.lon), size: 5200 };
+const MARYSVILLE = latLonToLocal(CENTER.lat, CENTER.lon);
+export const TOWN = { name: 'Marysville', x: MARYSVILLE.x - 2000, z: MARYSVILLE.z, size: 9400 };
 
 export const KIND = {
   HOUSE: 0,
@@ -254,7 +258,7 @@ export async function buildMarysville(cacheDir) {
   node["historic"](${bbox});
 );
 out geom;`,
-    path.join(cacheDir, 'marysville.json'),
+    path.join(cacheDir, `marysville_${TOWN.size}.json`),
   );
 
   const nodes = json.elements.filter((e) => e.type === 'node' && e.tags);

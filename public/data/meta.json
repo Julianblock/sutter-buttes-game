@@ -83,10 +83,10 @@
   "town": {
     "name": "Marysville",
     "center": [
-      19477.8,
+      17477.8,
       6772.2
     ],
-    "size": 5200,
-    "imageRes": 3072
+    "size": 9400,
+    "imageRes": 4096
   }
 }

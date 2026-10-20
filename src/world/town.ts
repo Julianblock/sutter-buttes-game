@@ -1204,7 +1204,7 @@ export class Town {
   update(cam: THREE.Vector3, focus: THREE.Vector3) {
     for (const c of this.chunks) {
       const d = Math.hypot(c.center.x - cam.x, c.center.z - cam.z) - c.radius;
-      c.mesh.visible = d < 12000;
+      c.mesh.visible = d < 6000;
       if (c.caster) c.caster.visible = Math.hypot(c.center.x - focus.x, c.center.z - focus.z) - c.radius < 700;
     }
   }
