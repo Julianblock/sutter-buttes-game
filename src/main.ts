@@ -128,7 +128,12 @@ async function boot() {
   if (town) engine.scene.add(town.group);
   if (pedestrians) engine.scene.add(pedestrians.mesh);
   const power = new PowerLines(world.osm, heightfield);
-  const props = new Props(world.osm, heightfield, power.pylons, town ? (x, z) => town.covers(x, z) : undefined);
+  // Generic buildings stand down inside the town, and anywhere they'd sit in a river.
+  const inWater = (x: number, z: number) => {
+    const w = water.sample(x, z);
+    return w.mask > 0.5 && w.level > heightfield.height(x, z);
+  };
+  const props = new Props(world.osm, heightfield, power.pylons, (x, z) => !!town?.covers(x, z) || inWater(x, z));
   const lights = new LightPoints([...props.lights, ...(town?.lights ?? [])]);
   engine.scene.add(props.group, lights.points, power.mesh);
   const cemeteries = new Cemeteries(cemeteryPlans, heightfield);
