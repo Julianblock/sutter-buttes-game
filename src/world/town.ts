@@ -440,6 +440,7 @@ export class Town {
     }
 
     if (b.id === 'state') this.marquee(out, ring, yG);
+    if (b.id === 'hotel') this.hotelTower(out, ring, yG, wall);
     if (b.k === K.COMMERCIAL && b.d && s > 0.55) this.awning(out, ring, yG, s);
   }
 
@@ -494,6 +495,35 @@ export class Town {
       for (const e of [-1, 1]) {
         const vt = yr - yG, vb = y - yG;
         out.tri(P(e * gw, -gd, y), P(e * gw, gd, y), P(e * gw, 0, yr), wall, wallStyle, [0, vb, 0, 0], [o.d, vb, 0, 0], [o.d / 2, vt, 0, 0]);
+      }
+    }
+  }
+
+  /**
+   * Hotel Marysville (1927): a seven-storey tower over the centre bay, capped by
+   * a red clay-tile pyramid, with balconies stacked at its corners.
+   */
+  private hotelTower(out: Builder, ring: [number, number][], yG: number, wall: RGB) {
+    const o = obb(ring);
+    const w = Math.min(16, o.w * 0.4), d = Math.min(16, o.d * 0.6);
+    const { cx, cz, ang } = o;
+    const storey = 3.6, levels = 8;
+    const top = yG + storey * levels;
+    const c = Math.cos(ang), s = Math.sin(ang);
+    const box: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([du, dv]) => {
+      const u = (du * w) / 2, v = (dv * d) / 2;
+      return [cx + u * c - v * s, cz + u * s + v * c];
+    });
+    this.walls(out, box, yG - 0.4, top, yG, wall, STYLE.HOTEL, storey, levels);
+    out.box(cx, cz, top, w + 0.8, d + 0.8, 0.6, ang, rgb('#efe6d2'), STYLE.STUCCO);
+    this.pitchedRoof(out, { cx, cz, w: w + 0.4, d: d + 0.4, ang }, top + 0.6, true, rgb('#a6472c'), STYLE.ROOF_TILE, wall, STYLE.STUCCO, yG, 0.6, 34);
+    const rail = rgb('#3a3632');
+    for (const [du, dv] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const u = du * (w / 2 + 0.5), v = dv * (d / 2 - 1.6);
+      const x = cx + u * c - v * s, z = cz + u * s + v * c;
+      for (let k = 2; k < levels; k++) {
+        out.box(x, z, yG + k * storey, 1.0, 2.6, 0.18, ang, wall, STYLE.CONCRETE);
+        out.box(x + du * c * 0.45, z + du * s * 0.45, yG + k * storey + 0.18, 0.06, 2.6, 0.9, ang, rail, STYLE.RAILING);
       }
     }
   }
