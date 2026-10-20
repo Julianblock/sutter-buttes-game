@@ -113,7 +113,25 @@ out geom;`,
   );
   json.elements.push(...extra.elements);
 
-  const out = { roads: [], waterways: [], waterAreas: [], buildings: [], power: [], peaks: [], places: [], masts: [], cemeteries: [] };
+  // Lakes mapped as multipolygons (Ellis Lake and its islands): closed outer rings, inner rings as holes.
+  const lakes = await overpass(
+    `[out:json][timeout:180];
+relation["natural"="water"]["type"="multipolygon"]["water"!~"^(river|canal|stream|oxbow|wastewater)$"](${bbox});
+out geom;`,
+    path.join(cacheDir, `osm_lakes_${size}.json`),
+  );
+  const closed = (g) => g?.length > 3 && g[0].lat === g[g.length - 1].lat && g[0].lon === g[g.length - 1].lon;
+  const lakeAreas = [];
+  for (const e of lakes.elements) {
+    const t = e.tags || {};
+    const holes = (e.members || []).filter((m) => m.role === 'inner' && closed(m.geometry)).map((m) => toLine(m.geometry));
+    for (const m of e.members || []) {
+      if (m.role !== 'outer' || !closed(m.geometry)) continue;
+      lakeAreas.push({ name: t.name || '', pts: toLine(m.geometry), ...(holes.length ? { holes } : {}) });
+    }
+  }
+
+  const out = { roads: [], waterways: [], waterAreas: lakeAreas, buildings: [], power: [], peaks: [], places: [], masts: [], cemeteries: [] };
   for (const e of json.elements) {
     const t = e.tags || {};
     if (e.type === 'node') {
