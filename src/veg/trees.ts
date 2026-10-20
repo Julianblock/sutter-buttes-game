@@ -117,6 +117,7 @@ export class Trees {
   private zone = 0;
   private imgZone = 0;
   private outer = new Map<string, Tile>();
+  private plantedOuter = new Map<string, number[]>();
   private hf: Heightfield;
 
   /** Hand-placed trees on top of those detected in the imagery (cemetery oaks). */
@@ -174,7 +175,7 @@ export class Trees {
   private growTile(ti: number, tj: number): Tile | null {
     const hf = this.hf;
     const x0 = ti * TILE, z0 = tj * TILE;
-    const out: number[] = [];
+    const out: number[] = [...(this.plantedOuter.get(ti + ',' + tj) ?? [])];
     const add = (x: number, z: number, r: number, h: number, sp: number, seed: number) => {
       const road = this.roads?.nearest(x, z, 12);
       if (road && road.dist < road.halfWidth + 1.8) return;
@@ -341,10 +342,8 @@ export class Trees {
   }
 
   private decode(buf: ArrayBuffer, zone: number, hf: Heightfield) {
-    // Tiles cover the imagery zone, widened to take any hand-planted trees outside it.
-    let grid = zone;
-    for (const t of this.planted) grid = Math.max(grid, 2 * Math.max(Math.abs(t.x), Math.abs(t.z)) + 2 * TILE);
-    grid = Math.ceil(grid / (2 * TILE)) * 2 * TILE;
+    // Tiles cover the imagery zone; hand-planted trees beyond it join the outer tiles as they grow.
+    const grid = Math.ceil(zone / (2 * TILE)) * 2 * TILE;
     this.zone = grid;
     this.imgZone = zone;
     const v = new DataView(buf);
@@ -400,11 +399,20 @@ export class Trees {
       lists[tj * tilesN + ti].push(tx, hf.height(tx, tz) - 0.35, tz, seed * 6.2831, r, h, sp, hash(seed * 17.3));
     }
     this.planted.forEach((t, k) => {
+      const road = this.roads?.nearest(t.x, t.z, 12);
+      if (road && road.dist < road.halfWidth + 1.2) return;
+      const seed = hash(k * 3.17 + 0.5);
+      const vals = [t.x, hf.height(t.x, t.z) - 0.35, t.z, seed * 6.2831, t.r, t.h, t.sp, hash(seed * 17.3)];
       const ti = Math.floor((t.x + grid / 2) / TILE);
       const tj = Math.floor((t.z + grid / 2) / TILE);
-      if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) return;
-      const seed = hash(k * 3.17 + 0.5);
-      lists[tj * tilesN + ti].push(t.x, hf.height(t.x, t.z) - 0.35, t.z, seed * 6.2831, t.r, t.h, t.sp, hash(seed * 17.3));
+      if (ti < 0 || tj < 0 || ti >= tilesN || tj >= tilesN) {
+        const key = Math.floor(t.x / TILE) + ',' + Math.floor(t.z / TILE);
+        const l = this.plantedOuter.get(key);
+        if (l) l.push(...vals);
+        else this.plantedOuter.set(key, vals);
+        return;
+      }
+      lists[tj * tilesN + ti].push(...vals);
     });
     this.plantOrchards(zone, hf, (...vals) => {
       const ti = Math.floor((vals[0] + grid / 2) / TILE);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { G } from '../render/globals';
 import type { ShadowMap } from '../render/shadows';
+import { TREE, type PlantedTree } from '../veg/trees';
 import { STYLE, townFragment, townVertex } from '../render/shaders/townShader';
 import { Decks } from './decks';
 import type { Heightfield } from './heightfield';
@@ -837,6 +838,54 @@ export class Town {
    * carved under the rivers. Find the stretches that run through water: crossings
    * (water on both sides) become bridges, levee-top roads beside it become embankments.
    */
+  /**
+   * Shade trees in the parkway strips of the residential streets, the old
+   * oaks and sycamores that canopy Marysville. Downtown stays bare.
+   */
+  streetTrees(): PlantedTree[] {
+    const out: PlantedTree[] = [];
+    const KINDS = new Set(['residential', 'tertiary', 'secondary', 'unclassified', 'living_street']);
+    for (const r of this.osm.roads) {
+      if (!KINDS.has(r.kind)) continue;
+      const half = roadSpec(r).half;
+      const p = r.pts;
+      let carry = 0;
+      for (let i = 0; i + 3 < p.length; i += 2) {
+        const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az;
+        const l = Math.hypot(dx, dz);
+        if (l < 1) continue;
+        const tx = dx / l, tz = dz / l;
+        let s = carry;
+        for (; s < l; s += 11) {
+          const x0 = ax + tx * s, z0 = az + tz * s;
+          if (!this.covers(x0, z0) || this.inCore(x0, z0)) continue;
+          for (const side of [-1, 1]) {
+            const h = hash(x0 * 0.71 + z0 * 1.37 + side * 5.3);
+            if (h < 0.22) continue;
+            const off = half + 2.4 + h * 0.6;
+            const x = x0 - tz * side * off, z = z0 + tx * side * off;
+            // Keep clear of walls and porches, the river and other streets.
+            const nx = -tz * side, nz = tx * side;
+            if (this.frontage(x, z, nx, nz, 6) < 4.5) continue;
+            if (this.frontage(x, z, tx, tz, 3) < 3 || this.frontage(x, z, -tx, -tz, 3) < 3) continue;
+            const w = this.water.sample(x, z);
+            if (w.mask > 0.3) continue;
+            const big = hash(h * 31.7) < 0.6;
+            out.push({
+              x,
+              z,
+              r: big ? 4.5 + h * 2.0 : 3.2 + h * 1.4,
+              h: big ? 11 + h * 5 : 7.5 + h * 3,
+              sp: big ? TREE.VALLEY_OAK : TREE.COTTONWOOD,
+            });
+          }
+        }
+        carry = s - l;
+      }
+    }
+    return out;
+  }
+
   private crossings(): TownBridge[] {
     const out: TownBridge[] = [];
     const STEP = 8;

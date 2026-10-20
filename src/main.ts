@@ -110,9 +110,13 @@ async function boot() {
   const waterSurface = new WaterSurface(terrain);
   engine.scene.add(sky.mesh, terrain.mesh, waterSurface.mesh);
 
+  // Before roads and traffic: the town's bridge decks carry them over the rivers.
+  const town = world.town ? new Town(world.town.data, heightfield, water, world.osm) : null;
+
   loading.progress('Growing the oak woodland', 0.95);
   const treeBuf = await fetch('data/trees.bin').then((r) => r.arrayBuffer());
-  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex, cemeteryPlans.flatMap((p) => p.trees), water);
+  const planted = [...cemeteryPlans.flatMap((p) => p.trees), ...(town?.streetTrees() ?? [])];
+  const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex, planted, water);
   engine.scene.add(trees.group);
   const seasonMonth = () => env.month - 1 + (env.day - 1) / 30;
   trees.setSeason(seasonMonth());
@@ -122,8 +126,6 @@ async function boot() {
   engine.scene.add(motes.points);
 
   loading.progress('Raising barns and broadcast towers', 0.97);
-  // Before roads and traffic: the town's bridge decks carry them over the rivers.
-  const town = world.town ? new Town(world.town.data, heightfield, water, world.osm) : null;
   const pedestrians = town ? new Pedestrians(town, world.osm, roadIndex, heightfield, lowPower ? 900 : 2800) : null;
   if (town) engine.scene.add(town.group);
   if (pedestrians) engine.scene.add(pedestrians.mesh);
