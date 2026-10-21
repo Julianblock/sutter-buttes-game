@@ -57,6 +57,7 @@ import { isTouch, lowPower } from './ui/device';
 import { TouchControls } from './ui/touch';
 import { Town } from './world/town';
 import { Walker } from './walk/walker';
+import { MapView } from './ui/map';
 import { Pedestrians } from './life/pedestrians';
 
 function paletteFor(s: GameSettings): Palette {
@@ -218,7 +219,16 @@ async function boot() {
         title: 'You are not alone',
         text: 'Pale shapes drift between the old stones, and fade the moment you come close. Whatever they are, the stories were true.',
       });
-  ui.append(menu.root, hud.root, hud.help, journal.root);
+  const map = new MapView(
+    [
+      { bmp: world.imagery.far, cx: 0, cz: 0, size: world.meta.regions.far.size },
+      { bmp: world.imagery.mid, cx: 0, cz: 0, size: world.meta.regions.mid.size },
+      { bmp: world.imagery.inner, cx: 0, cz: 0, size: world.meta.regions.inner.size },
+      ...[...(world.town ? [world.town] : []), ...world.towns].map((t) => ({ bmp: t.imagery, cx: t.data.center[0], cz: t.data.center[1], size: t.data.size })),
+    ],
+    allTowns.flatMap((t) => t.landmarks),
+  );
+  ui.append(menu.root, hud.root, hud.help, journal.root, map.root);
   const touch = isTouch ? new TouchControls(controls) : null;
   if (touch) {
     document.body.classList.add('touch');
@@ -464,6 +474,12 @@ async function boot() {
   setMode(mode);
 
   addEventListener('keydown', (e) => {
+    if (e.code === 'Tab' && mode === 'fly') {
+      e.preventDefault();
+      map.toggle();
+      if (map.open) (walker.release(), drive.release());
+    }
+    if (e.code === 'Escape' && map.open) return map.toggle(false);
     if (e.code === 'Escape') setMode(mode === 'menu' ? 'fly' : 'menu');
     if (mode !== 'fly') return;
     if (e.code === 'KeyH') hud.toggleHelp();
@@ -762,6 +778,7 @@ async function boot() {
     shadow.update(engine.renderer, focus);
     G.uInvExposure.value = 1 / env.exposure;
     updateSound(dt);
+    if (map.open) map.draw(actor.x, actor.z, walking ? walker.yaw + Math.PI : driving ? car.physics.psi : player.flight.psi);
     sky.update(cam, env.exposure);
     engine.render(env.exposure, G.uNight.value, G.uTime.value);
   }
@@ -786,6 +803,7 @@ async function boot() {
     setDriving,
     setWalking,
     walker,
+    map,
     /** Debug: runs whole frames now, for captures from throttled background tabs. */
     tick: (n = 1) => {
       for (let i = 0; i < n; i++) step();
