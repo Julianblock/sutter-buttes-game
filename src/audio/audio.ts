@@ -307,6 +307,16 @@ export class SoundScape {
   }
 
   /** Master volume 0..1, on a squared curve so the low end of a slider stays usable. */
+  /** The live graph for other sound layers to join, once started. */
+  graph() {
+    return this.ctx ? { ctx: this.ctx, master: this.master, noise: this.noise } : null;
+  }
+
+  /** Nightmare: the valley's living voices fall away. */
+  setNightmare(k: number) {
+    if (this.ctx) this.ambience.gain.setTargetAtTime(1 - 0.97 * k, this.ctx.currentTime, 0.8);
+  }
+
   setVolume(v: number) {
     this.volume = Math.max(0, Math.min(1, v)) ** 2;
     if (this.ctx) this.master.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.05);

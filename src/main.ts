@@ -60,6 +60,7 @@ import { Walker } from './walk/walker';
 import { MapView } from './ui/map';
 import { Nightmare } from './horror/nightmare';
 import { Horror } from './horror/horror';
+import { NightmareAudio } from './audio/nightmareAudio';
 import { Pedestrians } from './life/pedestrians';
 
 function paletteFor(s: GameSettings): Palette {
@@ -385,6 +386,9 @@ async function boot() {
     for (const c of carCasters) c.visible = car.object.visible;
   };
   const sound = new SoundScape();
+  const nmAudio = new NightmareAudio(() => sound.graph());
+  horror.sound = nmAudio;
+  walker.onStep = (run, wet) => nmAudio.footstep(run, wet);
   sound.muted = localStorage.getItem('sb-muted') === '1';
   const muteBtn = document.createElement('button');
   muteBtn.className = 'sound-btn';
@@ -515,6 +519,7 @@ async function boot() {
     rain: 0, snow: 0, roadWet: 0, windSpeed: 0,
   };
   let habitatT = 0;
+  const tmpFwd = new THREE.Vector3();
   const updateSound = (dt: number) => {
     const f = player.flight;
     const p = walking ? walker.pos : driving ? car.object.position : player.object.position;
@@ -564,6 +569,20 @@ async function boot() {
     env.listener.copy(cam.position);
     for (const strike of env.takeStrikes()) sound.thunder(strike.dist);
     sound.update(dt, aud);
+    sound.setNightmare(nightmare.level);
+    nmAudio.level = nightmare.level;
+    nmAudio.tension = horror.director.tension;
+    cam.getWorldDirection(tmpFwd);
+    nmAudio.update(dt, {
+      cam: cam.position,
+      fwd: tmpFwd,
+      inTown: allTowns.some((t) => t.covers(p.x, p.z)),
+      rural: allTowns.some((t) => t.covers(p.x, p.z)) ? 0.2 : Math.max(0, 1 - agl / 250),
+      night: G.uNight.value,
+      hour: env.hours,
+      active: mode === 'fly' && !free,
+      snow: G.uSnowCover.value,
+    });
   };
 
   // Debug free camera (?free).
