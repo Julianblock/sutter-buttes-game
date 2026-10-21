@@ -18,8 +18,6 @@ const TOWNS: Record<string, string> = {
   Sutter: 'sutter',
   Biggs: 'biggs',
   Princeton: 'princeton',
-  Olivehurst: 'olivehurst',
-  'Plumas Lake': 'plumaslake',
 };
 
 export const DESTINATIONS: Destination[] = [
@@ -30,8 +28,6 @@ export const DESTINATIONS: Destination[] = [
   { group: 'Towns', id: 'sutter', label: 'Sutter', blurb: 'The village at the south foot of the Buttes, where Pass Road begins.' },
   { group: 'Towns', id: 'biggs', label: 'Biggs', blurb: 'Rice country, home of the California Rice Experiment Station.' },
   { group: 'Towns', id: 'princeton', label: 'Princeton', blurb: 'Sacramento River village north of Colusa.' },
-  { group: 'Towns', id: 'olivehurst', label: 'Olivehurst', blurb: 'Yuba County town south of Marysville along Highway 70.' },
-  { group: 'Towns', id: 'plumaslake', label: 'Plumas Lake', blurb: 'New neighbourhoods on the old Feather River farmland south of Olivehurst.' },
   {
     group: 'Marysville',
     id: 'marysville',
