@@ -228,6 +228,7 @@ export async function buildTown(cfg, cacheDir) {
   way["amenity"~"^(bar|pub|nightclub|restaurant|cafe|fast_food|theatre|cinema)$"](${bbox});
   node["tourism"~"^(museum|attraction|artwork)$"](${bbox});
   node["historic"](${bbox});
+${cfg.extraQuery ? cfg.extraQuery(bbox) : ''}
 );
 out geom;`,
     path.join(cacheDir, `${cfg.id}_${cfg.size}.json`),
@@ -251,8 +252,15 @@ out geom;`,
     }
     if (t.man_made === 'bridge' && e.geometry) bridgeOutlines.push({ name: t.name || '', loc: t.loc_name || '', pts: cleanRing(e.geometry) });
   }
+  // Where OSM is thin, Microsoft's ML footprints (traced from aerial imagery) fill in.
+  if (cfg.msQuadkey) {
+    const ms = await msFootprints(cfg.msQuadkey, cacheDir, { s: se.lat, w: nw.lon, n: nw.lat, e: se.lon });
+    ms.forEach((f, i) => rings.push({ id: 9e9 + i, t: {}, geometry: f.geometry, ms: f }));
+  }
+  const osmWays = new Map();
+  const hung = new Map();
 
-  for (const { id, t, geometry } of rings) {
+  for (const { id, t, geometry, ms } of rings) {
     const pts = cleanRing(geometry);
     if (!pts) continue;
     const area = signedArea(pts);
@@ -264,9 +272,12 @@ out geom;`,
     }
     cx /= pts.length;
     cz /= pts.length;
+    // An ML footprint that overlaps a mapped one is the same building.
+    if (ms && buildings.some((b) => !b.s && (inside(ringOf(b), cx, cz) || inside(pts, ...centroid(b))))) continue;
     // Names often live on a point inside the outline rather than the building.
     let name = t.name || '';
     let tags = t;
+    let named = null;
     if (!name) {
       const n = nodes.find((n) => {
         if (!n.tags.name || !(n.tags.amenity || n.tags.tourism || n.tags.historic)) return false;
@@ -276,6 +287,7 @@ out geom;`,
       if (n) {
         name = n.tags.name;
         tags = { ...n.tags, ...t };
+        named = n;
       }
     }
     name = cfg.nameFix?.[name] || name;
@@ -284,9 +296,16 @@ out geom;`,
     const m = massing(cfg, kind, tags, area, box, cx, cz, id % 100003);
     const rec = { k: kind, h: m.h, l: m.levels, r: m.roof, p: pts.flat().map(r1) };
     if (m.tagged) rec.t = 1;
+    if (ms) {
+      // ML heights are to the highest point; pitched roofs put the eaves lower.
+      rec.h = r1(Math.max(2.4, Math.min(30, ms.height * (m.roof === ROOF.FLAT ? 1 : 0.72))));
+      rec.l = Math.max(1, Math.round(rec.h / 3.4));
+      rec.s = 1;
+    } else osmWays.set(id, rec);
     if (name) rec.n = name;
     const lm = name && cfg.landmarks.find((l) => l.re.test(name));
     if (lm) rec.id = lm.id;
+    if (lm && named) hung.set(lm.id, { node: named, dist: 0 });
     if (tags['building:colour']) rec.c = tags['building:colour'];
     if (cfg.core && inside(cfg.core, cx, cz)) rec.d = 1;
     const campus = cfg.campuses?.find((c) => inside(c.ring, cx, cz));
@@ -316,6 +335,7 @@ out geom;`,
         }
       }
     }
+    if (best) hung.set(lm.id, { node: n, dist: inside(ringOf(best), p.x, p.z) ? 0 : bd });
     if (best && lm.id === 'bokkai') {
       best.id = lm.id;
       best.n = n.tags.name;
@@ -379,6 +399,31 @@ out geom;`,
     if (p) spots.push({ n: t.name || '', k: a, x: r1(p.x), z: r1(p.z) });
   }
 
+  // Landmark registry: where each one came from and how sure we are of it.
+  const landmarks = [];
+  for (const lm of cfg.landmarks) {
+    const b = buildings.find((q) => q.id === lm.id);
+    if (!b) continue;
+    const [x, z] = centroid(b);
+    const ll = localToLatLon(x, z);
+    const way = [...osmWays].find(([, r]) => r === b)?.[0];
+    const h = hung.get(lm.id);
+    const src = way ? `osm:way/${way}` : `osm:node/${h.node.id}`;
+    const conf = way ? 0.95 : b.s ? Math.max(0.3, 0.8 - h.dist / 50) : Math.max(0.4, 0.9 - h.dist / 50);
+    landmarks.push({
+      id: lm.id,
+      name: b.n,
+      src,
+      footprint: b.s ? 'microsoft-ml' : 'osm',
+      lat: Math.round(ll.lat * 1e6) / 1e6,
+      lon: Math.round(ll.lon * 1e6) / 1e6,
+      x: r1(x),
+      z: r1(z),
+      conf: Math.round(conf * 100) / 100,
+      fidelity: lm.fidelity || 'massing from footprint; no reference imagery reviewed',
+    });
+  }
+
   buildings.sort((a, b) => a.p[1] - b.p[1] || a.p[0] - b.p[0]);
   return {
     name: cfg.name,
@@ -391,5 +436,51 @@ out geom;`,
     bridges,
     walks,
     spots,
+    ...(landmarks.length && cfg.registry ? { landmarks } : {}),
   };
+}
+
+function ringOf(b) {
+  const ring = [];
+  for (let i = 0; i < b.p.length; i += 2) ring.push([b.p[i], b.p[i + 1]]);
+  return ring;
+}
+
+function centroid(b) {
+  let x = 0, z = 0;
+  const n = b.p.length / 2;
+  for (let i = 0; i < b.p.length; i += 2) {
+    x += b.p[i];
+    z += b.p[i + 1];
+  }
+  return [x / n, z / n];
+}
+
+/**
+ * Microsoft Global ML Building Footprints (ODbL) for one zoom-9 quadkey,
+ * cached, clipped to the bounding box.
+ */
+async function msFootprints(quadkey, cacheDir, bb) {
+  const file = path.join(cacheDir, `ms_${quadkey}.csv.gz`);
+  let gz;
+  try {
+    gz = await fs.readFile(file);
+  } catch {
+    const links = await (await fetch('https://minedbuildings.z5.web.core.windows.net/global-buildings/dataset-links.csv')).text();
+    const row = links.split('\n').find((l) => l.split(',')[1] === quadkey);
+    if (!row) throw new Error(`No Microsoft footprints for quadkey ${quadkey}`);
+    gz = Buffer.from(await (await fetch(row.split(',')[2])).arrayBuffer());
+    await fs.mkdir(cacheDir, { recursive: true });
+    await fs.writeFile(file, gz);
+  }
+  const out = [];
+  for (const line of gunzipSync(gz).toString('utf8').split('\n')) {
+    if (!line) continue;
+    const f = JSON.parse(line);
+    const c = f.geometry.coordinates[0];
+    const [lon, lat] = c[0];
+    if (lat < bb.s || lat > bb.n || lon < bb.w || lon > bb.e) continue;
+    out.push({ height: f.properties.height > 0 ? f.properties.height : 3.2, cf: f.properties.confidence, geometry: c.map(([lo, la]) => ({ lat: la, lon: lo })) });
+  }
+  return out;
 }
