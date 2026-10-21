@@ -17,6 +17,9 @@ The terrain, land cover, roads, buildings and trees all come from real survey da
 - **Ranch tracks.** The private dirt tracks that wind into the range are mapped too: two-rut adobe lanes with a grassy crown that turn to mud in the rain. A graded one leaves North Butte Road for the slopes of North Butte.
 - **Old cemeteries.** North Butte Cemetery (the "witches' cemetery") sits at the end of a long dirt lane off North Butte Road under a big valley oak, with weathered marble tablets, obelisks, toppled and broken stones, an iron fence and a "closed sunset to sunrise" sign. Noyesburg, Stohlman and the tiny Pugh family plot are built from their real outlines too.
 - **Marysville.** Fly east across the Feather River to the old Gold Rush river port. Every building in a 9.4 km square covering Marysville and Yuba City is extruded from its real OpenStreetMap footprint, with tagged heights where mappers have recorded them and roof shapes, materials and storeys estimated from building type everywhere else. Downtown gets brick fronts with shopfronts, sash windows and cornices, Hotel Marysville gets its red-tiled tower and the high school its brick halls. The Victorian blocks have pastel siding, porches and tree-lined streets around Ellis Lake. St. Joseph Church (1855) has its white nave, lancet windows, rose window and 100 ft spire, and the Bok Kai Temple (1880) stands on the levee at the foot of D Street. Over the river are the 2019 Twin Cities Memorial Bridge beside the 1906–07 Northern Electric Pratt trusses, the 1947 Tenth Street bridge and the E Street bridge over the Yuba, all on piers above the water. Cars and the truck drive across their decks. On a Saturday night (or any night) the downtown sidewalks fill with people heading out. See [docs/marysville.md](docs/marysville.md).
+- **Princeton.** The rice town on the Sacramento is rebuilt from OpenStreetMap, Microsoft's machine-learned building footprints and a USGS orthophoto. Its church, fire station, post office and two schools are pinned to their mapped sources and checked by `npm run verify`. See [docs/princeton.md](docs/princeton.md).
+- **On foot.** Get out anywhere and walk or run in first person, with collisions against walls and trees. A map shows real coordinates.
+- **Nightmare Mode.** A reversible overlay: a black, foggy night, dead streetlights, boarded windows, fictional haunted houses and an invented shack you can walk into, all labelled as fiction. Small smiling cloaked figures watch, follow when you aren't looking, and close in as the tension rises.
 - **Places.** The menu's Places tab jumps you straight to the valley towns (Yuba City, Colusa, Live Oak, Gridley, Sutter, Biggs, Princeton), to downtown Marysville, the Twin Cities Memorial Bridge or St. Joseph Church, or into the Buttes: Pass Road, North Butte Road, West Butte Road, the cemetery gate or the ranch track to North Butte.
 - **Weather.** Clear, haze, scattered cloud, overcast, tule fog, rain, thunderstorms and snow. Rain soaks the ground and roads into reflective puddles with raindrop rings; snow builds up on fields, trees, roads and the truck, then melts depending on the season and sun. Lightning lights up the valley, and its thunder arrives late by the strike's distance. Wet roads cut tyre grip and can aquaplane the truck, fields turn to mud, snow makes everything slide, and showers bring downdrafts and turbulence that weigh a bird down.
 - **Drive a pickup.** Swap between bird and truck at any time. The truck has a first-person cockpit with live gauges, headlights, wipers, dust and spray trails, and collisions with trees.
@@ -42,7 +45,20 @@ The terrain, land cover, roads, buildings and trees all come from real survey da
 | M | Mute |
 | H | Help |
 | G | Switch between bird and truck |
+| B | Get out and walk |
+| N | Nightmare Mode |
+| Tab | Map |
 | Esc | Menu |
+
+On foot:
+
+| Key | Action |
+| --- | --- |
+| W A S D | Walk |
+| Shift | Run |
+| Mouse | Look (click to capture the pointer) |
+| F | Torch |
+| B | Back to flying |
 
 Driving:
 
@@ -68,7 +84,7 @@ npm run build
 npm run data      # rebuild public/data from USGS / USDA / OSM sources
 ```
 
-Debug URL parameters: `?fly` skips the menu, `?drive` starts in the truck, `?weather=rain` (or `storm`, `snow`, `tulefog`, …) and `?time=midday` pick conditions, `?place=cemetery` (or `pass`, `northbutte`, `westbutte`, `track`, `marysville`, `bridge`, `stjoseph`, `yubacity`, `colusa`, `liveoak`, `gridley`, `sutter`, `biggs`, `princeton`) picks the start point, and `?free&cam=x,y,z,yaw,pitch` starts a free camera.
+Debug URL parameters: `?fly` skips the menu, `?drive` starts in the truck, `?weather=rain` (or `storm`, `snow`, `tulefog`, …) and `?time=midday` pick conditions, `?place=cemetery` (or `pass`, `northbutte`, `westbutte`, `track`, `marysville`, `bridge`, `stjoseph`, `yubacity`, `colusa`, `liveoak`, `gridley`, `sutter`, `biggs`, `princeton`) picks the start point, `?walk` starts on foot, `?nightmare` starts in Nightmare Mode, and `?free&cam=x,y,z,yaw,pitch` starts a free camera. `npm run verify` checks the town landmarks against their sources and writes `docs/landmarks-<town>.md`.
 
 ## Data sources
 
@@ -76,3 +92,4 @@ Debug URL parameters: `?fly` skips the menu, `?drive` starts in the truck, `?wea
 - Imagery: USGS National Map imagery (including a 1.7 m/pixel mosaic of Marysville)
 - Land cover: USDA NASS Cropland Data Layer
 - Roads, buildings, bridges and masts: © OpenStreetMap contributors
+- Princeton building footprints: Microsoft Global ML Building Footprints (ODbL)
