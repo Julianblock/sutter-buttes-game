@@ -1003,3 +1003,11 @@ body.touch .sound-ctl {
   font: 300 11px/1.6 var(--sans);
   color: var(--ink-dim);
 }
+.veil {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 15;
+}

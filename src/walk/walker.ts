@@ -24,6 +24,9 @@ export class Walker {
   pitch = 0;
   enabled = false;
   speed = 0;
+  running = false;
+  /** Speed multiplier imposed from outside (dread, mud). */
+  speedScale = 1;
   /** Distance walked, for footsteps and head bob. */
   stride = 0;
   /** Seconds since the walker last turned to look behind (> 2.4 rad off the walking line). */
@@ -101,7 +104,8 @@ export class Walker {
     if (len > 1) (f /= len), (s /= len);
     const run = has('ShiftLeft', 'ShiftRight') || (pad?.buttons[10]?.pressed ?? false);
     const depth = this.depth(this.pos.x, this.pos.z);
-    const max = (run ? RUN : WALK) * (depth > 0.3 ? 0.45 : 1);
+    this.running = run && len > 0.1;
+    const max = (run ? RUN : WALK) * (depth > 0.3 ? 0.45 : 1) * this.speedScale;
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     const wx = (-sin * f + cos * s) * max, wz = (-cos * f - sin * s) * max;
     const a = 1 - Math.exp(-dt * (len > 0.05 ? 9 : 12));

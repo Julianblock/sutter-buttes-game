@@ -319,6 +319,25 @@ export class Town {
     return best;
   }
 
+  /** Is there a building wall within `r` of (x, z)? */
+  nearWall(x: number, z: number, r: number) {
+    const l = this.edges.get(Math.floor(x / 20) * 100003 + Math.floor(z / 20));
+    if (!l) return false;
+    for (let i = 0; i < l.length; i += 4) {
+      const ax = l[i], az = l[i + 1], ex = l[i + 2] - ax, ez = l[i + 3] - az;
+      const t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / (ex * ex + ez * ez || 1)));
+      if (Math.hypot(x - ax - ex * t, z - az - ez * t) < r) return true;
+    }
+    return false;
+  }
+
+  /** Is the straight line between two points free of walls? */
+  clearLine(ax: number, az: number, bx: number, bz: number) {
+    const d = Math.hypot(bx - ax, bz - az);
+    if (d < 0.5) return true;
+    return this.frontage(ax, az, (bx - ax) / d, (bz - az) / d, d) >= d - 0.05;
+  }
+
   /** Pushes a circle of radius `r` at (x, z) out of any building wall it overlaps. */
   push(p: { x: number; z: number }, r: number) {
     const seen = new Set<number[]>();
