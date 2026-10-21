@@ -9,7 +9,8 @@ import { CENTER } from './lib/geo.mjs';
 import { buildMosaic } from './lib/tiles.mjs';
 import { buildLandcover, LC } from './lib/landcover.mjs';
 import { buildOsm } from './lib/osm.mjs';
-import { buildMarysville, TOWN } from './lib/marysville.mjs';
+import { MARYSVILLE_TOWN as TOWN } from './lib/marysville.mjs';
+import { buildTown } from './lib/town.mjs';
 import { canopyMask, horizonAO, readHeight } from './lib/derived.mjs';
 import { detectTrees } from './lib/trees.mjs';
 
@@ -190,7 +191,7 @@ const steps = {
   },
   async marysville() {
     console.log('town/marysville');
-    const town = await buildMarysville(path.resolve('.cache/osm'));
+    const town = await buildTown(TOWN, path.resolve('.cache/osm'));
     for (const k of ['buildings', 'bridges', 'walks', 'spots']) console.log(`  ${k.padEnd(10)} ${town[k].length}`);
     const tagged = town.buildings.filter((b) => b.t).length;
     console.log(`  ${tagged} buildings with mapped heights, ${town.buildings.filter((b) => b.id).map((b) => b.id).join(', ')}`);
