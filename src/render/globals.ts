@@ -46,6 +46,7 @@ export const G = {
   uCamWaterY: { value: -1000 }, // that surface's height
   uVision: { value: 0 }, // North Butte easter egg: the Buttes erupting, 0..1
   uVolcano: { value: new THREE.Vector3() }, // volcanic core centre x, z and radius
+  uNightmare: { value: 0 }, // Nightmare mode blend 0..1
 };
 
 export type GlobalUniforms = typeof G;

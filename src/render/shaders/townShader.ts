@@ -65,7 +65,23 @@ flat in vec4 vColor;
 #ifdef SHADOW_PASS
 in float vShadowZ;
 #endif
+uniform float uNightmare;
 out vec4 outColor;
+
+/** Nightmare: rough horizontal boards nailed over a window. */
+vec3 boards(float v, vec2 id) {
+  float row = floor(v / 0.21);
+  float gap = step(0.86, fract(v / 0.21));
+  vec3 wood = vec3(0.30, 0.24, 0.17) * 0.55 * (0.65 + 0.45 * hash12(vec2(row, id.x * 7.0 + id.y)));
+  return mix(wood, vec3(0.006), gap);
+}
+
+/** Nightmare: most rooms dark; the odd one with a cold light that will not hold steady. */
+vec3 nightmareRoom(vec2 id, float night) {
+  float h = hash12(id + 17.3);
+  float flick = step(0.35, fract(sin(floor(uTime * (7.0 + h * 9.0)) * 91.7 + h * 57.0) * 43758.5453));
+  return vec3(0.5, 0.62, 0.5) * step(0.965, h) * night * 0.3 * flick;
+}
 
 /** Warm interior light, with the odd TV. */
 vec3 roomLight(vec2 id) {
@@ -115,6 +131,15 @@ void main() {
         float lit = step(hotel ? 0.8 : 0.62, hash12(id + cellSeed * 3.1));
         emit = roomLight(id + cellSeed) * roomLight(id) * lit * night * 0.5;
         if (lit > 0.5) albedo *= 0.2;
+        if (uNightmare > 0.0) {
+          vec2 bid = id + cellSeed * 5.3;
+          emit = mix(emit, nightmareRoom(bid, night), uNightmare);
+          if (hash12(bid) < 0.5) {
+            albedo = mix(albedo, boards(v, bid), uNightmare);
+            rough = mix(rough, 0.9, uNightmare);
+            emit *= 1.0 - uNightmare;
+          }
+        }
       } else if (f.y > y0 - 0.04 && f.y < y0 && f.x > w0 - 0.04 && f.x < w1 + 0.04 && id.y < storeys) {
         albedo = vec3(0.6) * 0.55; // sill
       }
@@ -142,6 +167,10 @@ void main() {
           vec3 shop = mix(vec3(1.0, 0.66, 0.36), vec3(0.95, 0.84, 0.66), hash12(id + 1.3));
           emit = shop * shop * open * night * (0.3 + 0.25 * smoothstep(3.3, 0.5, v));
           emit = max(emit, vec3(1.0, 0.8, 0.55) * 0.05 * (1.0 - uNight) * open);
+          if (uNightmare > 0.0) {
+            emit = mix(emit, nightmareRoom(id, night), uNightmare);
+            if (hash12(id + 2.9) < 0.6) albedo = mix(albedo, boards(v, id), uNightmare);
+          }
         } else if (!pier && v >= 3.3 && v < 3.9) {
           // Signboard; some carry neon after dark.
           vec2 id = vec2(floor(u / 6.2), 1.0) + cellSeed;
@@ -150,6 +179,8 @@ void main() {
           float neonBand = step(0.4, h) * step(abs(fract(u / 6.2) - 0.5), 0.36) * step(abs(v - 3.6), 0.2);
           vec3 neon = h > 0.85 ? vec3(1.0, 0.15, 0.45) : h > 0.7 ? vec3(0.2, 0.55, 1.0) : vec3(1.0, 0.3, 0.08);
           float flick = 0.85 + 0.15 * step(0.1, fract(uTime * 0.37 + h * 7.0));
+          // Dead tubes that catch for an instant, then die again.
+          flick *= mix(1.0, step(0.96, fract(uTime * 0.9 + h * 13.0)) * step(0.5, fract(uTime * 23.0)), uNightmare);
           emit += neon * neonBand * night * 2.4 * flick;
         }
       } else if (v < top - 0.3) {
@@ -166,6 +197,10 @@ void main() {
           rough = 0.12;
           float lit = step(0.6, hash12(id + cellSeed * 1.7));
           emit = roomLight(id + cellSeed) * lit * night * 0.35;
+          if (uNightmare > 0.0) {
+            emit = mix(emit, nightmareRoom(id + cellSeed, night), uNightmare);
+            if (hash12(id + cellSeed * 2.3) < 0.45) albedo = mix(albedo, boards(up, id + cellSeed), uNightmare);
+          }
         }
       } else {
         // Cornice and parapet cap.
@@ -181,11 +216,11 @@ void main() {
       if (v > 0.4 && v < 3.0 && bay > 0.1 && bay < 0.9 && hash12(floor(vec2(u / 24.0, 0.0)) + cellSeed) > 0.45) {
         albedo = vec3(0.03, 0.04, 0.05);
         rough = 0.1;
-        emit = vec3(0.92, 0.86, 0.74) * night * 0.24 * step(0.3, hash12(cellSeed + floor(u / 24.0)));
+        emit = vec3(0.92, 0.86, 0.74) * night * 0.24 * step(0.3, hash12(cellSeed + floor(u / 24.0))) * (1.0 - uNightmare);
       } else if (storeys > 1.5 && v > 3.6 && fract((v - 3.6) / 3.6) > 0.35 && fract((v - 3.6) / 3.6) < 0.8 && v < storeys * 3.6) {
         albedo = vec3(0.04, 0.05, 0.06);
         rough = 0.15;
-        emit = vec3(0.9, 0.95, 1.0) * night * 0.2 * step(0.6, hash12(floor(vec2(u / 3.0, v / 3.6)) + cellSeed));
+        emit = vec3(0.9, 0.95, 1.0) * night * 0.2 * step(0.6, hash12(floor(vec2(u / 3.0, v / 3.6)) + cellSeed)) * (1.0 - uNightmare);
       } else {
         albedo *= 0.94 + 0.06 * step(0.5, fract(u / 1.2));
       }
@@ -206,7 +241,7 @@ void main() {
         glass = mix(glass, vec3(0.85, 0.7, 0.2), step(0.75, hash12(floor(vec2(x * 4.0, v * 3.0)) + id)));
         albedo = glass * 0.08;
         rough = 0.1;
-        emit = glass * night * 0.9;
+        emit = glass * night * 0.9 * (1.0 - 0.92 * uNightmare);
       }
     }
   } else if (style < 4.5) {
@@ -249,7 +284,7 @@ void main() {
     float lead = max(spoke, smoothstep(0.9, 1.0, rr));
     albedo = mix(glass * 0.08, vec3(0.6) * 0.55, lead);
     rough = 0.15;
-    emit = glass * (1.0 - lead) * night * 1.1;
+    emit = glass * (1.0 - lead) * night * 1.1 * (1.0 - 0.92 * uNightmare);
   } else if (style < 13.5) {
     rough = 0.35;
   } else if (style < 14.5) {
@@ -259,6 +294,18 @@ void main() {
     // Painted spire: lit from below at night.
     rough = 0.6;
     emit = vec3(0.95, 0.95, 1.0) * 0.08 * night * smoothstep(40.0, 15.0, v);
+  }
+
+  if (uNightmare > 0.0) {
+    // Years of neglect: rain streaks, peeling paint, damp rising from the ground.
+    float streak = vnoise(vec2(u * 0.9 + 3.0 * vnoise(vec2(u * 0.2, 0.0)), v * 0.18));
+    float peel = smoothstep(0.66, 0.72, vnoise(vec2(u, v) * 4.5 + vWorld.xz * 0.05)) * smoothstep(0.1, 0.03, fp);
+    vec3 aged = mix(albedo, vec3(dot(albedo, vec3(0.333))), 0.65) * (0.35 + 0.35 * streak);
+    if (wall) {
+      aged = mix(aged, vec3(0.13, 0.12, 0.10) * 0.55, peel * 0.5);
+      aged *= mix(0.5, 1.0, smoothstep(0.0, 1.6, v));
+    }
+    albedo = mix(albedo, aged, uNightmare);
   }
 
   float shadow = shadowAt(vWorld + n * 0.3, 0.0012);

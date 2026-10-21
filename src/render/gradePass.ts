@@ -10,6 +10,7 @@ export function createGradePass(): ShaderPass {
       uContrast: { value: 1.1 },
       uVignette: { value: 0.28 },
       uNight: { value: 0 },
+      uNightmare: { value: 0 },
       uTime: { value: 0 },
       uLift: { value: new THREE.Vector3(0, 0, 0) },
     },
@@ -23,6 +24,7 @@ export function createGradePass(): ShaderPass {
       uniform float uContrast;
       uniform float uVignette;
       uniform float uNight;
+      uniform float uNightmare;
       uniform float uTime;
       uniform vec3 uLift;
       varying vec2 vUv;
@@ -55,6 +57,17 @@ export function createGradePass(): ShaderPass {
 
         vec2 q = vUv - 0.5;
         c *= 1.0 - uVignette * dot(q, q) * 1.6;
+        if (uNightmare > 0.0) {
+          // Drained, sickly cold, closing in from the edges, with film grain.
+          float g = dot(c, vec3(0.2126, 0.7152, 0.0722));
+          vec3 sick = vec3(g) * vec3(0.86, 0.98, 0.92) + vec3(0.0, 0.004, 0.006);
+          vec3 n = c;
+          n = mix(n, sick, 0.75);
+          n *= 1.0 - 0.75 * smoothstep(0.05, 0.6, dot(q, q) * 1.6);
+          float grain = fract(sin(dot(vUv * 731.0 + floor(uTime * 24.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+          n += grain * 0.035 * (0.4 + g);
+          c = mix(c, max(n, 0.0), uNightmare);
+        }
 
         c = toSRGB(max(c, 0.0));
         // Contrast in perceptual space so it doesn't crush shadow detail.

@@ -9,6 +9,7 @@ uniform vec3 uCamPos;
 uniform float uTime;
 uniform float uNight;
 uniform float uPixelScale;
+uniform float uNightmare;
 in vec4 aColor;   // rgb, size (m)
 in float aBlink;  // 0 steady, 1 aviation beacon
 out vec3 vColor;
@@ -31,6 +32,13 @@ void main() {
   } else {
     // Gentle flicker of distant lights through warm air.
     on *= 0.85 + 0.15 * sin(uTime * 3.0 + position.x * 1.7 + position.z);
+    if (uNightmare > 0.0) {
+      // Nightmare: half the lamps are dead, the rest buzz and stutter.
+      float hs = fract(sin(dot(position.xz, vec2(12.9898, 78.233))) * 43758.5453);
+      float sputter = step(0.3, fract(sin(floor(uTime * (6.0 + hs * 10.0)) * 91.7 + hs * 57.0) * 43758.5453));
+      float nm = step(0.45, hs) * mix(1.0, sputter, step(0.6, hs)) * 0.7;
+      on *= mix(1.0, nm, uNightmare);
+    }
   }
   float px = aColor.w * uPixelScale / max(dist, 1.0);
   float size = clamp(px * 3.0, 3.0, 32.0);

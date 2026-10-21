@@ -58,6 +58,7 @@ import { TouchControls } from './ui/touch';
 import { Town } from './world/town';
 import { Walker } from './walk/walker';
 import { MapView } from './ui/map';
+import { Nightmare } from './horror/nightmare';
 import { Pedestrians } from './life/pedestrians';
 
 function paletteFor(s: GameSettings): Palette {
@@ -198,6 +199,7 @@ async function boot() {
   const chase = new ChaseCamera(cam, heightfield, canvas);
   const drive = new DriveControls(controls, canvas);
   const driveCam = new DriveCamera(cam, heightfield);
+  const nightmare = new Nightmare(env, [traffic.group, pedestrians?.mesh]);
   const walker = new Walker(controls, canvas, heightfield, water, [
     ...allTowns.map((t) => ({ push: (p: { x: number; z: number }, r: number) => t.push(p, r), trunk: () => null })),
     { push: () => {}, trunk: (x: number, z: number, r: number) => trees.trunkHit(x, z, r) },
@@ -470,6 +472,7 @@ async function boot() {
   };
   if (params.has('drive')) setDriving(true);
   if (params.has('walk')) setWalking(true);
+  if (params.has('nightmare')) nightmare.set(true);
   if (params.get('place')) goTo(params.get('place')!);
   setMode(mode);
 
@@ -488,6 +491,7 @@ async function boot() {
     if (e.code === 'KeyM') setMuted(!sound.muted);
     if (e.code === 'KeyG' && !e.repeat) setDriving(!driving);
     if (e.code === 'KeyB' && !e.repeat) setWalking(!walking);
+    if (e.code === 'KeyN' && !e.repeat) nightmare.toggle();
     if (e.code === 'KeyL' && driving) car.headlights = !car.headlightsWanted(G.uNight.value, murky());
   });
 
@@ -659,6 +663,7 @@ async function boot() {
     if (!params.has('timer')) engine.adapt(rawDt);
     G.uTime.value += dt;
     env.apply(dt);
+    nightmare.apply(dt, heightfield.height(cam.position.x, cam.position.z));
 
     air.time += dt;
     const deck = Math.min(1, Math.max(G.uRain.value, G.uSnowFall.value) * 5);
@@ -804,6 +809,7 @@ async function boot() {
     setWalking,
     walker,
     map,
+    nightmare,
     /** Debug: runs whole frames now, for captures from throttled background tabs. */
     tick: (n = 1) => {
       for (let i = 0; i < n; i++) step();

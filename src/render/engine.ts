@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { createGradePass } from './gradePass';
+import { G } from './globals';
 import { lowPower } from '../ui/device';
 
 function supportsReversedDepth(): boolean {
@@ -101,6 +102,7 @@ export class Engine {
   render(exposure: number, night = 0, time = 0) {
     this.exposurePass.uniforms.uExposure.value = exposure;
     this.grade.uniforms.uNight.value = night;
+    this.grade.uniforms.uNightmare.value = G.uNightmare.value;
     this.grade.uniforms.uTime.value = time % 100;
     this.renderer.toneMappingExposure = 1;
     this.composer.render();
