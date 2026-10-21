@@ -60,6 +60,7 @@ import { Walker } from './walk/walker';
 import { MapView } from './ui/map';
 import { Nightmare } from './horror/nightmare';
 import { Horror } from './horror/horror';
+import { Haunts } from './horror/haunts';
 import { NightmareAudio } from './audio/nightmareAudio';
 import { Pedestrians } from './life/pedestrians';
 
@@ -202,20 +203,24 @@ async function boot() {
   const drive = new DriveControls(controls, canvas);
   const driveCam = new DriveCamera(cam, heightfield);
   const nightmare = new Nightmare(env, [traffic.group, pedestrians?.mesh]);
+  const haunts = new Haunts(allTowns, heightfield, roadIndex);
+  engine.scene.add(haunts.mesh);
   const horror = new Horror(nightmare, {
     ground: (x, z) => heightfield.height(x, z),
     blocked: (x, z) => {
-      if (allTowns.some((t) => t.nearWall(x, z, 0.45))) return true;
+      if (allTowns.some((t) => t.nearWall(x, z, 0.45)) || haunts.walls.near(x, z, 0.45)) return true;
       if (trees.trunkHit(x, z, 0.25)) return true;
       const w = water.sample(x, z);
       return w.mask > 0.3 && w.level - heightfield.height(x, z) > 0.4;
     },
-    clear: (ax, az, bx, bz) => allTowns.every((t) => !t.covers(ax, az) || t.clearLine(ax, az, bx, bz)),
+    clear: (ax, az, bx, bz) => haunts.walls.clear(ax, az, bx, bz) && allTowns.every((t) => !t.covers(ax, az) || t.clearLine(ax, az, bx, bz)),
   });
+  if (haunts.resident) horror.smilers.statics.push(haunts.resident);
   engine.scene.add(horror.smilers.mesh);
   const walker = new Walker(controls, canvas, heightfield, water, [
     ...allTowns.map((t) => ({ push: (p: { x: number; z: number }, r: number) => t.push(p, r), trunk: () => null })),
     { push: () => {}, trunk: (x: number, z: number, r: number) => trees.trunkHit(x, z, r) },
+    { push: (p: { x: number; z: number }, r: number) => haunts.walls.push(p, r), trunk: () => null },
   ]);
   const places = new Places(world.osm, allTowns.flatMap((t) => t.landmarks));
   const hud = new Hud(places);
@@ -243,6 +248,7 @@ async function boot() {
     ],
     allTowns.flatMap((t) => t.landmarks),
   );
+  map.fiction = haunts.list;
   ui.append(menu.root, hud.root, hud.help, journal.root, map.root, horror.root);
   const touch = isTouch ? new TouchControls(controls) : null;
   if (touch) {
@@ -828,13 +834,17 @@ async function boot() {
       G.uHeadDir.value.set(1, -0.035, 0).transformDirection(car.model.body.matrixWorld);
     }
     walker.speedScale = horror.slow;
+    haunts.update(nightmare.level);
+    map.showFiction = nightmare.level > 0.5;
+    const nearHaunt = nightmare.level > 0.5 ? haunts.nearest(actor.x, actor.z) : null;
+    hud.note = nearHaunt && nearHaunt.dist < 30 ? `${nearHaunt.haunt.name} · fiction` : null;
     horror.update(dt, cam, {
       x: actor.x,
       z: actor.z,
       ground: heightfield.height(actor.x, actor.z),
       walking: walking && mode === 'fly',
       inTown: allTowns.some((t) => t.covers(actor.x, actor.z)),
-      haunt: 0,
+      haunt: haunts.proximity(actor.x, actor.z),
       darkness: G.uNight.value,
       speed: walking ? walker.speed : driving ? Math.abs(car.physics.speed) : player.flight.speed,
       running: walking && walker.running,
@@ -875,6 +885,7 @@ async function boot() {
     map,
     nightmare,
     horror,
+    haunts,
     /** Debug: runs whole frames now, for captures from throttled background tabs. */
     tick: (n = 1) => {
       for (let i = 0; i < n; i++) step();

@@ -150,13 +150,17 @@ export class Hud {
     this.lastPlace = '';
   }
 
+  /** A line in the status chip that overrides the usual readout (null clears it). */
+  note: string | null = null;
+
   updateWalk(dt: number, x: number, y: number, z: number, yaw: number, speed: number) {
     if (!this.visible) return;
     this.placeCheck -= dt;
     if (this.placeCheck <= 0) {
       this.placeCheck = 0.5;
       this.setPlace(this.places.at(x, z, 2));
-      this.chip.classList.remove('show');
+      if (this.note) this.chip.textContent = this.note;
+      this.chip.classList.toggle('show', !!this.note);
     }
     this.placeTimer -= dt;
     if (this.placeTimer < 0 && this.placeTimer > -1) this.place.classList.add('fade');

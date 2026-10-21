@@ -21,6 +21,9 @@ export class MapView {
   private mpp = 1.6;
   private mouse: { x: number; y: number } | null = null;
   open = false;
+  /** Invented places (Nightmare), drawn in red and labelled as fiction. */
+  fiction: { name: string; x: number; z: number }[] = [];
+  showFiction = false;
 
   constructor(
     private sources: MapSource[],
@@ -110,6 +113,18 @@ export class MapView {
       g.fillText(l.name, x + 8, y + 5);
       g.fillStyle = '#fff';
       g.fillText(l.name, x + 7, y + 4);
+    }
+
+    if (this.showFiction) {
+      for (const l of this.fiction) {
+        const [x, y] = toS(l.x, l.z);
+        if (x < -50 || y < -20 || x > W + 50 || y > H + 20) continue;
+        g.fillStyle = '#c0241a';
+        g.fillRect(x - 4, y - 4, 8, 8);
+        if (m > 5) continue;
+        g.fillStyle = '#ff8a7a';
+        g.fillText(`${l.name} (fiction)`, x + 8, y + 4);
+      }
     }
 
     // You: an arrow pointing along the heading (psi = 0 faces south, +z).

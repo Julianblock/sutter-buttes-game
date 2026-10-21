@@ -10,7 +10,7 @@ import type { FlowField } from './nav';
 
 export type HorrorState = 'DORMANT' | 'OBSERVING' | 'FOLLOWING' | 'GATHERING' | 'PURSUIT' | 'SURROUNDING';
 
-const MAX = 12;
+const MAX = 14;
 // About 0.9 m tall before the per-figure 0.75..1.05 scale: 2 to 3 feet.
 const NECK = 0.56;
 
@@ -247,6 +247,8 @@ export class Smilers {
   nearest = Infinity;
   /** Ring centre while surrounding, and the escape gap. */
   ring = { x: 0, z: 0, t: 0, gap: 0, open: false };
+  /** Ones that never move (the Hollow House's resident). */
+  statics: { x: number; z: number; heading: number }[] = [];
   onEvent: (e: SmilerEvent, x: number, y: number, z: number, k: number) => void = () => {};
   /** Fires when they reach the player (pursuit ends in a circle). */
   onCaught: () => void = () => {};
@@ -449,6 +451,12 @@ export class Smilers {
 
       this.iPos.setXYZW(k, s.x, s.y, s.z, s.heading);
       this.iAnim.setXYZW(k, s.seed, s.tilt, s.scale, s.agitation);
+      k++;
+    }
+    for (const st of this.statics) {
+      if (k >= MAX) break;
+      this.iPos.setXYZW(k, st.x, this.world.ground(st.x, st.z), st.z, st.heading);
+      this.iAnim.setXYZW(k, 4.2, 0.55 + 0.1 * Math.sin(performance.now() * 0.0003), 0.82, 0);
       k++;
     }
     this.geo.instanceCount = k;
