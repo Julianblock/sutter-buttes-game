@@ -71,6 +71,7 @@ uniform float uTerrainShadowSize;
 uniform vec3 uHeadPos;
 uniform vec3 uHeadDir;
 uniform float uHeadOn;
+uniform float uHeadCone;  // 0 truck low beams, 1 a hand torch
 uniform float uWet;
 uniform float uSnowCover;
 uniform float uRain;
@@ -350,9 +351,18 @@ vec3 headlight(vec3 albedo, vec3 n, vec3 wp) {
   float beam = exp(-h * h * 3.2) * smoothstep(0.035, -0.01, v) * smoothstep(-1.2, -0.1, v);
   beam += exp(-h * h * 40.0 - v * v * 300.0) * 1.5; // hot spot
   beam *= smoothstep(0.1, 0.5, fwd);
-  float ndl = max(dot(n, -l), 0.0);
   float att = smoothstep(0.8, 2.5, dist) / (dist * dist + 4.0);
-  return albedo / PI * vec3(1.0, 0.93, 0.8) * HEADLIGHT_I * beam * att * ndl * uHeadOn * smoothstep(140.0, 60.0, dist);
+  vec3 tint = vec3(1.0, 0.93, 0.8);
+  if (uHeadCone > 0.0) {
+    // A torch: round spill, a tight hot centre, a dim ring at the rim.
+    float r2 = h * h + v * v;
+    float torch = (exp(-r2 * 18.0) * 0.45 + exp(-r2 * 120.0) * 2.2 + smoothstep(0.3, 0.26, sqrt(r2)) * 0.1) * smoothstep(0.2, 0.6, fwd);
+    beam = mix(beam, torch * 0.9, uHeadCone);
+    att = mix(att, smoothstep(0.15, 0.6, dist) / (dist * dist + 12.0), uHeadCone);
+    tint = mix(tint, vec3(1.0, 0.9, 0.72), uHeadCone);
+  }
+  float ndl = max(dot(n, -l), 0.0);
+  return albedo / PI * tint * HEADLIGHT_I * beam * att * ndl * uHeadOn * smoothstep(140.0, 60.0, dist);
 }
 
 /** Expanding rings where raindrops hit standing water (normal xz offset). */

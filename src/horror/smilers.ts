@@ -148,7 +148,7 @@ void main() {
   } else if (vPart < 2.5) {
     // The face. uv: (-1..1) across, (-1..1) up.
     vec2 q = (vUv - 0.5) * 2.0;
-    vec3 skin = vec3(0.78, 0.76, 0.72);
+    vec3 skin = vec3(0.6, 0.585, 0.555);
     albedo = skin * (0.55 + 0.45 * smoothstep(1.0, 0.4, length(q)));
     // Hood shadow across the brow.
     albedo *= mix(0.35, 1.0, smoothstep(0.85, 0.2, q.y));

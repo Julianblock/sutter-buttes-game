@@ -35,6 +35,7 @@ export const G = {
   uHeadPos: { value: new THREE.Vector3() }, // player truck headlights
   uHeadDir: { value: new THREE.Vector3(1, 0, 0) },
   uHeadOn: { value: 0 },
+  uHeadCone: { value: 0 }, // 0 truck beams, 1 hand torch
   uWet: { value: 0 }, // 0 dry .. 1 soaked ground, puddles standing
   uSnowCover: { value: 0 }, // 0 bare .. 1 full blanket of snow
   uRain: { value: 0 }, // current rainfall intensity 0..1

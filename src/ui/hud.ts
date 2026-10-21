@@ -79,6 +79,7 @@ export class Hud {
     <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Walk</td></tr>
     <tr><td>Mouse</td><td>Look around (click to capture)</td></tr>
     <tr><td><kbd>Shift</kbd></td><td>Run</td></tr>
+    <tr><td><kbd>F</kbd></td><td>Torch</td></tr>
     <tr><td><kbd>B</kbd></td><td>Take wing again</td></tr>
     <tr><td><kbd>G</kbd></td><td>Take the pickup</td></tr>
     <tr><td><kbd>Tab</kbd></td><td>Map</td></tr>

@@ -6,6 +6,8 @@ export const wireVertex = /* glsl */ `
 uniform vec3 uCamPos;
 uniform float uPixelAngle;
 uniform float uFar;       // wires fade out by this distance (m)
+uniform float uTime;
+uniform float uNightmare;
 in vec2 aStrip;   // t along span, side (-1/1)
 in vec4 aP0;      // start xyz, sag (m)
 in vec4 aP1;      // end xyz, conductor radius (m)
@@ -19,6 +21,14 @@ void main() {
   float sag = aP0.w;
   vec3 world = mix(aP0.xyz, aP1.xyz, t);
   world.y -= 4.0 * sag * t * (1.0 - t);
+  if (uNightmare > 0.0) {
+    // The air is dead still, and still the wires swing.
+    vec2 span = aP1.xz - aP0.xz;
+    vec2 perp = normalize(vec2(-span.y, span.x) + 1e-5);
+    float ph = dot(aP0.xz, vec2(0.013, 0.017));
+    float swing = sin(uTime * 0.55 + ph) * 0.6 + sin(uTime * 1.31 + ph * 2.3) * 0.25;
+    world.xz += perp * swing * (0.6 + sag * 0.35) * 4.0 * t * (1.0 - t) * uNightmare;
+  }
   vec3 tangent = normalize(aP1.xyz - aP0.xyz + vec3(0.0, -4.0 * sag * (1.0 - 2.0 * t), 0.0));
   vec3 toCam = uCamPos - world;
   float dist = length(toCam);

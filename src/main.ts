@@ -266,6 +266,9 @@ async function boot() {
   let mode: 'menu' | 'fly' = params.has('fly') || params.has('drive') ? 'fly' : 'menu';
   let driving = false;
   let walking = false;
+  /** Hand torch while on foot (F). */
+  let torch = false;
+  const torchDir = new THREE.Vector3(0, 0, -1);
   const previewAngle = 0.95;
   let previewT = 0;
 
@@ -507,7 +510,11 @@ async function boot() {
     if (e.code === 'KeyM') setMuted(!sound.muted);
     if (e.code === 'KeyG' && !e.repeat) setDriving(!driving);
     if (e.code === 'KeyB' && !e.repeat) setWalking(!walking);
-    if (e.code === 'KeyN' && !e.repeat) nightmare.toggle();
+    if (e.code === 'KeyN' && !e.repeat) {
+      nightmare.toggle();
+      if (nightmare.active && walking) torch = true;
+    }
+    if (e.code === 'KeyF' && walking && !e.repeat) torch = !torch;
     if (e.code === 'KeyL' && driving) car.headlights = !car.headlightsWanted(G.uNight.value, murky());
   });
 
@@ -802,7 +809,20 @@ async function boot() {
     flocks.update(dt, cam.position, { x: air.windX, z: air.windZ });
     syncCarCasters();
     G.uHeadOn.value = car.object.visible ? car.headOn : 0;
-    if (G.uHeadOn.value > 0) {
+    G.uHeadCone.value = 0;
+    if (walking && torch && mode === 'fly') {
+      // The beam lags the head a touch, like a hand following the eyes.
+      cam.getWorldDirection(tmpFwd);
+      torchDir.lerp(tmpFwd, 1 - Math.exp(-dt * 14)).normalize();
+      G.uHeadCone.value = 1;
+      G.uHeadOn.value = 1;
+      // Nerves (or the batteries) give out when they are close.
+      const tens = horror.director.tension / 100;
+      if (nightmare.level > 0.5 && tens > 0.6 && Math.sin(G.uTime.value * 23.0) * Math.sin(G.uTime.value * 3.7) > 1.55 - tens) G.uHeadOn.value = 0.08;
+      tmpRight.crossVectors(torchDir, cam.up).normalize();
+      G.uHeadPos.value.copy(cam.position).addScaledVector(tmpRight, 0.12).y -= 0.15;
+      G.uHeadDir.value.copy(torchDir);
+    } else if (G.uHeadOn.value > 0) {
       car.model.body.updateWorldMatrix(true, false);
       G.uHeadPos.value.set(2.9, 0.95, 0).applyMatrix4(car.model.body.matrixWorld);
       G.uHeadDir.value.set(1, -0.035, 0).transformDirection(car.model.body.matrixWorld);
