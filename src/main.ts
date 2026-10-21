@@ -112,10 +112,12 @@ async function boot() {
 
   // Before roads and traffic: the town's bridge decks carry them over the rivers.
   const town = world.town ? new Town(world.town.data, heightfield, water, world.osm) : null;
+  const villages = world.towns.map((t) => new Town(t.data, heightfield, water, world.osm, false));
+  const allTowns = [...(town ? [town] : []), ...villages];
 
   loading.progress('Growing the oak woodland', 0.95);
   const treeBuf = await fetch('data/trees.bin').then((r) => r.arrayBuffer());
-  const planted = [...cemeteryPlans.flatMap((p) => p.trees), ...(town?.streetTrees() ?? [])];
+  const planted = [...cemeteryPlans.flatMap((p) => p.trees), ...allTowns.flatMap((t) => t.streetTrees())];
   const trees = new Trees(treeBuf, world.meta.trees?.size ?? 16000, heightfield, roadIndex, planted, water);
   engine.scene.add(trees.group);
   const seasonMonth = () => env.month - 1 + (env.day - 1) / 30;
@@ -127,7 +129,7 @@ async function boot() {
 
   loading.progress('Raising barns and broadcast towers', 0.97);
   const pedestrians = town ? new Pedestrians(town, world.osm, roadIndex, heightfield, lowPower ? 900 : 2800) : null;
-  if (town) engine.scene.add(town.group);
+  for (const t of allTowns) engine.scene.add(t.group);
   if (pedestrians) engine.scene.add(pedestrians.mesh);
   const power = new PowerLines(world.osm, heightfield);
   // Generic buildings stand down inside the town, and anywhere they'd sit in a river.
@@ -135,8 +137,8 @@ async function boot() {
     const w = water.sample(x, z);
     return w.mask > 0.5 && w.level > heightfield.height(x, z);
   };
-  const props = new Props(world.osm, heightfield, power.pylons, (x, z) => !!town?.covers(x, z) || inWater(x, z));
-  const lights = new LightPoints([...props.lights, ...(town?.lights ?? [])]);
+  const props = new Props(world.osm, heightfield, power.pylons, (x, z) => allTowns.some((t) => t.covers(x, z)) || inWater(x, z));
+  const lights = new LightPoints([...props.lights, ...allTowns.flatMap((t) => t.lights)]);
   engine.scene.add(props.group, lights.points, power.mesh);
   const cemeteries = new Cemeteries(cemeteryPlans, heightfield);
   engine.scene.add(cemeteries.group);
@@ -181,7 +183,7 @@ async function boot() {
   const shadow = new ShadowMap();
   trees.addShadowCasters(shadow);
   props.addShadowCasters(shadow);
-  town?.addShadowCasters(shadow);
+  for (const t of allTowns) t.addShadowCasters(shadow);
   pedestrians?.addShadowCasters(shadow);
   cemeteries.addShadowCasters(shadow);
   wildlife.addShadowCasters(shadow);
@@ -194,7 +196,7 @@ async function boot() {
   const chase = new ChaseCamera(cam, heightfield, canvas);
   const drive = new DriveControls(controls, canvas);
   const driveCam = new DriveCamera(cam, heightfield);
-  const places = new Places(world.osm, town?.landmarks);
+  const places = new Places(world.osm, allTowns.flatMap((t) => t.landmarks));
   const hud = new Hud(places);
   hud.units = settings.units;
   const menu = new Menu(settings);
@@ -695,7 +697,7 @@ async function boot() {
     }
     const focus = free ? cam.position : actor;
     props.update(cam.position, focus);
-    town?.update(cam.position, focus);
+    for (const t of allTowns) t.update(cam.position, focus);
     pedestrians?.update(dt, cam.position, env.hours);
     shadow.update(engine.renderer, focus);
     G.uInvExposure.value = 1 / env.exposure;
@@ -708,7 +710,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    town, pedestrians, touch, engine, env, terrain, water, waterSurface, fish, ghosts, volcano, journal, lore, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
+    town, villages, pedestrians, touch, engine, env, terrain, water, waterSurface, fish, ghosts, volcano, journal, lore, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     /** Renders a frame and returns it as a JPEG data URL (debug capture). */
     snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {

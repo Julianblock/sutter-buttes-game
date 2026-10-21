@@ -17,6 +17,8 @@ export interface WorldTextures {
   /** Town orthophoto and its square: centre x, z and size (0 when absent). */
   imgTown: THREE.Texture;
   town: THREE.Vector3;
+  /** Every town orthophoto; the terrain shows the one nearest the camera. */
+  towns: { img: THREE.Texture; at: THREE.Vector3 }[];
 }
 
 function heightTexture(g: HeightGrid): THREE.DataTexture {
@@ -89,9 +91,12 @@ export function createWorldTextures(world: WorldData, renderer: THREE.WebGLRende
     imgTown = new THREE.DataTexture(new Uint8Array(4), 1, 1);
     imgTown.needsUpdate = true;
   }
+  const towns = world.towns.map((t) => ({ img: imageTexture(t.imagery, aniso), at: new THREE.Vector3(t.data.center[0], t.data.center[1], t.data.size) }));
+  if (town.z > 0) towns.unshift({ img: imgTown, at: town.clone() });
   return {
     imgTown,
     town,
+    towns,
     heightInner: heightTexture(world.heights.inner),
     heightMid: heightTexture(world.heights.mid),
     heightFar: heightTexture(world.heights.far),

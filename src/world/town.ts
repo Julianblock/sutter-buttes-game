@@ -230,7 +230,7 @@ export class Town {
   readonly material: THREE.ShaderMaterial;
   readonly shadowMaterial: THREE.ShaderMaterial;
   readonly lights: number[] = [];
-  readonly decks = new Decks();
+  readonly decks: Decks;
   readonly landmarks: Landmark[] = [];
   readonly name: string;
   readonly cx: number;
@@ -247,8 +247,11 @@ export class Town {
     private hf: Heightfield,
     private water: Water,
     private osm: OsmData,
+    /** The primary town also bridges every river crossing in the valley; others share its decks. */
+    primary = true,
   ) {
     this.name = data.name;
+    this.decks = (!primary && hf.decks) || new Decks();
     [this.cx, this.cz] = data.center;
     this.half = data.size / 2;
     this.core = data.core;
@@ -265,7 +268,7 @@ export class Town {
 
     for (const b of data.buildings) this.addBuilding(b);
     for (const br of joinBridges(data.bridges)) this.addBridge(br);
-    for (const br of this.crossings()) this.addBridge(br, true);
+    if (primary) for (const br of this.crossings()) this.addBridge(br, true);
 
     for (const [, bld] of this.builders) {
       if (!bld.pos.length) continue;

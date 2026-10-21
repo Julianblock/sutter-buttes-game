@@ -19,6 +19,8 @@ export interface WorldMeta {
   trees?: { size: number; count: number };
   /** Detailed town zone (Marysville), with its own orthophoto. */
   town?: { name: string; center: [number, number]; size: number; imageRes: number };
+  /** Further detailed towns (Princeton), each with its own data and orthophoto. */
+  towns?: { id: string; name: string; center: [number, number]; size: number; imageRes: number }[];
 }
 
 export interface TownBuilding {

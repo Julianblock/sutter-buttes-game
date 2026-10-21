@@ -23,6 +23,7 @@ export interface WorldData {
   canopy: Pixels;
   osm: OsmData;
   town: { data: TownData; imagery: ImageBitmap } | null;
+  towns: { data: TownData; imagery: ImageBitmap }[];
 }
 
 type Progress = (label: string, fraction: number) => void;
@@ -97,6 +98,16 @@ export async function loadWorld(onProgress: Progress): Promise<WorldData> {
       },
     ]);
   }
+  const towns: WorldData['towns'] = [];
+  for (const t of meta.towns ?? []) {
+    jobs.push([
+      t.name,
+      async () => {
+        const [data, imagery] = await Promise.all([fetch(BASE + `${t.id}.json`).then((r) => r.json() as Promise<TownData>), fetchBitmap(`imagery_${t.id}.jpg`)]);
+        towns.push({ data, imagery });
+      },
+    ]);
+  }
 
   let done = 0;
   await Promise.all(
@@ -107,5 +118,5 @@ export async function loadWorld(onProgress: Progress): Promise<WorldData> {
     }),
   );
 
-  return { meta, heights, imagery, landcover, canopy, osm, town };
+  return { meta, heights, imagery, landcover, canopy, osm, town, towns };
 }

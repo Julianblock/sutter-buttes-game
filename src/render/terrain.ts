@@ -87,7 +87,10 @@ export class Terrain {
     this.mesh = new THREE.Mesh(this.geo, material);
     this.mesh.frustumCulled = false;
     this.mesh.name = 'terrain';
+    this.towns = tex.towns;
   }
+
+  private towns: WorldTextures['towns'];
 
   get geometry() {
     return this.geo;
@@ -98,7 +101,18 @@ export class Terrain {
   }
 
   update(camera: THREE.PerspectiveCamera) {
-    this.material.uniforms.uLodK.value = this.lodK;
+    const u = this.material.uniforms;
+    u.uLodK.value = this.lodK;
+    // One sampler to spare: it carries the orthophoto of whichever town is nearest.
+    let near = null, best = Infinity;
+    for (const t of this.towns) {
+      const d = Math.hypot(t.at.x - camera.position.x, t.at.y - camera.position.z);
+      if (d < best) [best, near] = [d, t];
+    }
+    if (near && u.uImgTown.value !== near.img) {
+      u.uImgTown.value = near.img;
+      u.uTown.value.copy(near.at);
+    }
     camera.updateMatrixWorld();
     this.projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.projView, camera.coordinateSystem, camera.reversedDepth);
