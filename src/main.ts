@@ -56,6 +56,7 @@ import { VolcanoVision } from './world/volcano';
 import { isTouch, lowPower } from './ui/device';
 import { TouchControls } from './ui/touch';
 import { Town } from './world/town';
+import { Walker } from './walk/walker';
 import { Pedestrians } from './life/pedestrians';
 
 function paletteFor(s: GameSettings): Palette {
@@ -196,6 +197,10 @@ async function boot() {
   const chase = new ChaseCamera(cam, heightfield, canvas);
   const drive = new DriveControls(controls, canvas);
   const driveCam = new DriveCamera(cam, heightfield);
+  const walker = new Walker(controls, canvas, heightfield, water, [
+    ...allTowns.map((t) => ({ push: (p: { x: number; z: number }, r: number) => t.push(p, r), trunk: () => null })),
+    { push: () => {}, trunk: (x: number, z: number, r: number) => trees.trunkHit(x, z, r) },
+  ]);
   const places = new Places(world.osm, allTowns.flatMap((t) => t.landmarks));
   const hud = new Hud(places);
   hud.units = settings.units;
@@ -235,6 +240,7 @@ async function boot() {
   let inspectHeight = 0.35;
   let mode: 'menu' | 'fly' = params.has('fly') || params.has('drive') ? 'fly' : 'menu';
   let driving = false;
+  let walking = false;
   const previewAngle = 0.95;
   let previewT = 0;
 
@@ -283,18 +289,54 @@ async function boot() {
     hud.show(m === 'fly');
     touch?.show(m === 'fly');
     drive.enabled = m === 'fly' && driving;
-    player.object.visible = !driving;
+    walker.enabled = m === 'fly' && walking;
+    player.object.visible = !driving && !walking;
     if (m === 'fly') {
-      if (driving) driveCam.reset();
+      if (walking) walker.update(0, cam);
+      else if (driving) driveCam.reset();
       else chase.snapFrom(cam, player.object.position);
       canvas.focus();
     } else {
       drive.release();
+      walker.release();
       hud.toggleHelp(false);
     }
   };
+  /** Gets down on foot where the bird or truck is, or takes wing again from where you stand. */
+  const setWalking = (w: boolean) => {
+    if (w === walking) return;
+    if (w && driving) {
+      const p = car.physics;
+      // Step out of the driver's door.
+      walker.spawn(p.pos.x - Math.cos(p.psi) * 2.2, p.pos.z + Math.sin(p.psi) * 2.2, p.psi + Math.PI);
+      setDriving(false);
+    } else if (w) {
+      const f = player.flight;
+      walker.spawn(f.pos.x, f.pos.z, f.psi + Math.PI);
+    }
+    walking = w;
+    if (!w) {
+      walker.release();
+      const p = walker.pos;
+      player.flight.spawn(p.x, p.y + 3, p.z, walker.yaw + Math.PI);
+      player.flight.gamma = 0.3;
+      chase.snapFrom(cam, player.object.position);
+    }
+    hud.setTravel(w ? 'walk' : driving ? 'drive' : 'fly');
+    walker.enabled = w && mode === 'fly';
+    player.object.visible = !w && !driving;
+    if (player.shadowCaster) player.shadowCaster.visible = !w && !driving;
+    if (w) walker.update(0, cam);
+  };
   /** Swaps between the bird and the pickup at the current spot. */
   const setDriving = (d: boolean) => {
+    if (d && walking) {
+      const p = walker.pos;
+      player.flight.spawn(p.x, p.y + 2, p.z, walker.yaw + Math.PI);
+      walking = false;
+      walker.release();
+      walker.enabled = false;
+    }
     driving = d;
     hud.setDriving(d);
     touch?.setDriving(d);
@@ -382,6 +424,8 @@ async function boot() {
       }
       car.place(x, z, s.psi);
       driveCam.reset();
+    } else if (walking) {
+      walker.spawn(x, z, s.psi + Math.PI);
     } else {
       player.flight.spawn(x, heightfield.height(x, z) + (s.alt ?? 45), z, s.psi);
       chase.snapFrom(cam, player.object.position);
@@ -395,6 +439,7 @@ async function boot() {
   menu.onFly = () => {
     sound.start();
     immerse();
+    if (walking) setWalking(false);
     if (driving) setDriving(false);
     travel();
     setMode('fly');
@@ -406,7 +451,15 @@ async function boot() {
     travel();
     setMode('fly');
   };
+  menu.onWalk = () => {
+    sound.start();
+    immerse();
+    if (!walking) setWalking(true);
+    travel();
+    setMode('fly');
+  };
   if (params.has('drive')) setDriving(true);
+  if (params.has('walk')) setWalking(true);
   if (params.get('place')) goTo(params.get('place')!);
   setMode(mode);
 
@@ -418,6 +471,7 @@ async function boot() {
     if (e.code === 'KeyV' && !driving) sound.call(player.species.id);
     if (e.code === 'KeyM') setMuted(!sound.muted);
     if (e.code === 'KeyG' && !e.repeat) setDriving(!driving);
+    if (e.code === 'KeyB' && !e.repeat) setWalking(!walking);
     if (e.code === 'KeyL' && driving) car.headlights = !car.headlightsWanted(G.uNight.value, murky());
   });
 
@@ -431,8 +485,8 @@ async function boot() {
   let habitatT = 0;
   const updateSound = (dt: number) => {
     const f = player.flight;
-    const p = driving ? car.object.position : player.object.position;
-    const agl = driving ? 1.5 : f.agl;
+    const p = walking ? walker.pos : driving ? car.object.position : player.object.position;
+    const agl = walking ? 1.6 : driving ? 1.5 : f.agl;
     habitatT -= dt;
     if (habitatT <= 0) {
       habitatT = 0.5;
@@ -455,17 +509,18 @@ async function boot() {
       aud.carSpeed = c.v;
     }
     const cp = car.physics;
-    aud.speed = driving ? Math.abs(cp.speed) : f.speed;
+    aud.speed = walking ? walker.speed : driving ? Math.abs(cp.speed) : f.speed;
     aud.agl = agl;
     aud.flapPhase = f.flapPhase;
-    aud.flapAmount = driving ? 0 : f.flapAmount;
-    aud.perched = !driving && f.state === 'perched';
+    aud.flapAmount = driving || walking ? 0 : f.flapAmount;
+    aud.perched = walking || (!driving && f.state === 'perched');
     aud.drive = driving ? 1 : 0;
     aud.rpm = cp.rpm;
     aud.throttle = drive.input.throttle;
     aud.tyre = cp.surface.rough;
     aud.slip = cp.slip;
     aud.horn = driving && mode === 'fly' && controls.keys.has('KeyV');
+    if (walking) aud.flapPhase = 0;
     aud.night = G.uNight.value;
     aud.month = env.month;
     aud.hour = env.hours;
@@ -612,8 +667,13 @@ async function boot() {
       cam.updateMatrixWorld();
     } else if (mode === 'menu') {
       controls.update(dt);
-      if (driving) previewCar(dt);
+      if (walking) walker.update(0, cam);
+      else if (driving) previewCar(dt);
       else previewCam(dt);
+    } else if (walking) {
+      controls.update(dt);
+      walker.update(dt, cam);
+      hud.updateWalk(dt, walker.pos.x, walker.pos.y, walker.pos.z, walker.yaw, walker.speed);
     } else if (driving) {
       const input = drive.update(dt);
       if (controls.consume('KeyC')) driveCam.cycle();
@@ -666,7 +726,7 @@ async function boot() {
     car.physics.wet = G.uWet.value;
     car.physics.snow = G.uSnowCover.value;
     car.physics.waterDepth = car.physics.onDeck ? 0 : water.depthAt(car.physics.pos.x, car.physics.pos.z);
-    const actor = driving ? car.object.position : player.object.position;
+    const actor = walking ? walker.pos : driving ? car.object.position : player.object.position;
     wildlife.update(dt, cam.position, actor);
     flocks.setMonth(env.month);
     fish.setMonth(env.month);
@@ -681,7 +741,7 @@ async function boot() {
         underwater,
         truckUnder: driving && car.physics.waterDepth > 1.7,
         water: body,
-        agl: driving ? 1.5 : player.flight.agl,
+        agl: walking ? 1.6 : driving ? 1.5 : player.flight.agl,
         night: G.uNight.value,
         snowCover: G.uSnowCover.value,
       });
@@ -724,6 +784,8 @@ async function boot() {
     },
     setMode,
     setDriving,
+    setWalking,
+    walker,
     /** Debug: runs whole frames now, for captures from throttled background tabs. */
     tick: (n = 1) => {
       for (let i = 0; i < n; i++) step();

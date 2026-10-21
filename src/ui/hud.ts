@@ -2,6 +2,9 @@ import type { AirField } from '../birds/air';
 import type { FlightModel } from '../birds/flight';
 import type { Places, PlaceInfo } from '../world/places';
 import type { CarPhysics } from '../vehicle/car';
+import { localToLatLon } from '../world/geo';
+
+export type Travel = 'fly' | 'drive' | 'walk';
 
 const DIRS = ['N', '·', 'NE', '·', 'E', '·', 'SE', '·', 'S', '·', 'SW', '·', 'W', '·', 'NW', '·'];
 
@@ -71,6 +74,24 @@ export class Hud {
     <tr><td>Camera · Fly</td><td>Cockpit, chase or hood view · get out and fly</td></tr>
     </table><p style="font:300 12px/1.6 var(--sans);color:var(--ink-dim);margin:16px 0 0;max-width:380px">
     Pass Road climbs right through the middle of the Buttes. Tap to close.</p></div>`;
+  private walkHelp =
+    `<div class="box"><h2>On foot</h2><table>
+    <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Walk</td></tr>
+    <tr><td>Mouse</td><td>Look around (click to capture)</td></tr>
+    <tr><td><kbd>Shift</kbd></td><td>Run</td></tr>
+    <tr><td><kbd>B</kbd></td><td>Take wing again</td></tr>
+    <tr><td><kbd>G</kbd></td><td>Take the pickup</td></tr>
+    <tr><td><kbd>Tab</kbd></td><td>Map</td></tr>
+    <tr><td><kbd>N</kbd></td><td>Nightmare</td></tr>
+    <tr><td><kbd>M</kbd></td><td>Mute sound</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Menu</td></tr>
+    </table><p style="font:300 12px/1.6 var(--sans);color:var(--ink-dim);margin:16px 0 0;max-width:380px">
+    Walls, trunks and deep water stop you. The coordinates are real: the world is laid out on the ground it was surveyed from.</p></div>`;
+  private walkTouch =
+    `<div class="box"><h2>On foot</h2><table>
+    <tr><td>Left thumb</td><td>Walk</td></tr>
+    <tr><td>Drag the view</td><td>Look around</td></tr>
+    </table><p style="font:300 12px/1.6 var(--sans);color:var(--ink-dim);margin:16px 0 0;max-width:380px">Tap to close.</p></div>`;
   /** Phones and tablets: describe the on-screen controls instead of keys. */
   touch = false;
   private place = el('place fade', '<div class="t"></div><div class="s"></div>');
@@ -102,22 +123,50 @@ export class Hud {
     this.tape.innerHTML = html;
   }
 
-  private driving: boolean | null = null;
+  private travel: Travel | null = null;
 
   useTouch() {
     this.touch = true;
-    const d = !!this.driving;
-    this.driving = null;
-    this.setDriving(d);
+    const t = this.travel ?? 'fly';
+    this.travel = null;
+    this.setTravel(t);
   }
 
   setDriving(d: boolean) {
-    if (d === this.driving) return;
-    this.driving = d;
-    this.help.innerHTML = this.touch ? (d ? this.driveTouch : this.flyTouch) : d ? this.driveHelp : this.flyHelp;
-    this.keys.innerHTML = `<kbd>H</kbd> controls · <kbd>C</kbd> camera · <kbd>G</kbd> ${d ? 'fly' : 'drive'} · <kbd>Esc</kbd> menu`;
-    this.vario.classList.toggle('vario', !d);
+    this.setTravel(d ? 'drive' : 'fly');
+  }
+
+  setTravel(t: Travel) {
+    if (t === this.travel) return;
+    this.travel = t;
+    const help = { fly: [this.flyHelp, this.flyTouch], drive: [this.driveHelp, this.driveTouch], walk: [this.walkHelp, this.walkTouch] }[t];
+    this.help.innerHTML = help[this.touch ? 1 : 0];
+    this.keys.innerHTML =
+      t === 'walk'
+        ? `<kbd>H</kbd> controls · <kbd>Tab</kbd> map · <kbd>B</kbd> fly · <kbd>G</kbd> drive · <kbd>Esc</kbd> menu`
+        : `<kbd>H</kbd> controls · <kbd>C</kbd> camera · <kbd>B</kbd> walk · <kbd>G</kbd> ${t === 'drive' ? 'fly' : 'drive'} · <kbd>Esc</kbd> menu`;
+    this.vario.classList.toggle('vario', t === 'fly');
     this.lastPlace = '';
+  }
+
+  updateWalk(dt: number, x: number, y: number, z: number, yaw: number, speed: number) {
+    if (!this.visible) return;
+    this.placeCheck -= dt;
+    if (this.placeCheck <= 0) {
+      this.placeCheck = 0.5;
+      this.setPlace(this.places.at(x, z, 2));
+      this.chip.classList.remove('show');
+    }
+    this.placeTimer -= dt;
+    if (this.placeTimer < 0 && this.placeTimer > -1) this.place.classList.add('fade');
+    const imp = this.units === 'imperial';
+    const { lat, lon } = localToLatLon(x, z);
+    this.setInst(this.spd, (speed * (imp ? 2.237 : 3.6)).toFixed(1), imp ? 'mph' : 'km/h');
+    this.setInst(this.alt, lat.toFixed(5) + '°', 'latitude N');
+    this.setInst(this.vario, Math.abs(lon).toFixed(5) + '°', 'longitude W');
+    (this.vario.firstChild as HTMLElement).className = 'v';
+    this.setInst(this.msl, Math.round(y * (imp ? 3.281 : 1)).toLocaleString(), imp ? 'ft elevation' : 'm elevation');
+    this.setHeading(yaw + Math.PI);
   }
 
   private setInst(e: HTMLElement, v: string, u: string) {

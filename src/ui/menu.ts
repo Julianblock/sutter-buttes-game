@@ -44,6 +44,7 @@ export class Menu {
   onChange: (s: GameSettings, what: keyof GameSettings) => void = () => {};
   onFly: () => void = () => {};
   onDrive: () => void = () => {};
+  onWalk: () => void = () => {};
   /** Start point picked in the Places tab, used by the next Take Flight / Drive. */
   place: string | null = null;
 
@@ -74,7 +75,9 @@ export class Menu {
     fly.onclick = () => this.onFly();
     const drive = el('button', 'cta alt', 'Drive');
     drive.onclick = () => this.onDrive();
-    foot.append(fly, drive, el('div', 'hint', '<kbd>Esc</kbd> returns here · <kbd>G</kbd> swaps<br>bird and truck · <kbd>H</kbd> controls'));
+    const walk = el('button', 'cta alt', 'Walk');
+    walk.onclick = () => this.onWalk();
+    foot.append(fly, drive, walk, el('div', 'hint', '<kbd>Esc</kbd> returns here · <kbd>G</kbd> truck<br><kbd>B</kbd> on foot · <kbd>H</kbd> controls'));
     panel.append(foot);
     this.root.append(panel);
     this.render();

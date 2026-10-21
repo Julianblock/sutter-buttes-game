@@ -319,6 +319,26 @@ export class Town {
     return best;
   }
 
+  /** Pushes a circle of radius `r` at (x, z) out of any building wall it overlaps. */
+  push(p: { x: number; z: number }, r: number) {
+    const seen = new Set<number[]>();
+    for (let di = -1; di <= 1; di++)
+      for (let dj = -1; dj <= 1; dj++) {
+        const l = this.edges.get((Math.floor(p.x / 20) + di) * 100003 + Math.floor(p.z / 20) + dj);
+        if (!l || seen.has(l)) continue;
+        seen.add(l);
+        for (let i = 0; i < l.length; i += 4) {
+          const ax = l[i], az = l[i + 1], ex = l[i + 2] - ax, ez = l[i + 3] - az;
+          const t = Math.max(0, Math.min(1, ((p.x - ax) * ex + (p.z - az) * ez) / (ex * ex + ez * ez || 1)));
+          const dx = p.x - (ax + ex * t), dz = p.z - (az + ez * t);
+          const d = Math.hypot(dx, dz);
+          if (d >= r || d < 1e-6) continue;
+          p.x += (dx / d) * (r - d);
+          p.z += (dz / d) * (r - d);
+        }
+      }
+  }
+
   private addEdge(ax: number, az: number, bx: number, bz: number) {
     const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 10));
     const keys = new Set<number>();
