@@ -88,5 +88,17 @@
     ],
     "size": 9400,
     "imageRes": 4096
-  }
+  },
+  "towns": [
+    {
+      "id": "princeton",
+      "name": "Princeton",
+      "center": [
+        -16912.4,
+        -22037.3
+      ],
+      "size": 3600,
+      "imageRes": 2048
+    }
+  ]
 }

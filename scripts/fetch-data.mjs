@@ -11,6 +11,7 @@ import { buildLandcover, LC } from './lib/landcover.mjs';
 import { buildOsm } from './lib/osm.mjs';
 import { MARYSVILLE_TOWN as TOWN } from './lib/marysville.mjs';
 import { buildTown } from './lib/town.mjs';
+import { PRINCETON_TOWN } from './lib/princeton.mjs';
 import { canopyMask, horizonAO, readHeight } from './lib/derived.mjs';
 import { detectTrees } from './lib/trees.mjs';
 
@@ -218,6 +219,32 @@ const steps = {
       .toFile(path.join(OUT, 'imagery_marysville.jpg'));
     await writeMeta({ town: { name: TOWN.name, center: town.center, size: TOWN.size, imageRes: res } });
   },
+};
+
+steps.princeton = async () => {
+  console.log('town/princeton');
+  const cfg = PRINCETON_TOWN;
+  const town = await buildTown(cfg, path.resolve('.cache/osm'));
+  const ml = town.buildings.filter((b) => b.s).length;
+  console.log(`  buildings  ${town.buildings.length} (${ml} from Microsoft ML footprints)`);
+  for (const l of town.landmarks ?? []) console.log(`  ${l.id.padEnd(10)} ${l.name} · ${l.src} · conf ${l.conf}`);
+  await fs.writeFile(path.join(OUT, 'princeton.json'), JSON.stringify(town));
+  const res = 2048;
+  const sample = await buildMosaic('usgsImagery', 16, cfg.size * 1.02, cfg.x, cfg.z);
+  const raw = Buffer.alloc(res * res * 3);
+  const rgb = [0, 0, 0];
+  const step = cfg.size / res;
+  for (let j = 0; j < res; j++) {
+    const z = cfg.z - cfg.size / 2 + (j + 0.5) * step;
+    for (let i = 0; i < res; i++) {
+      sample(cfg.x - cfg.size / 2 + (i + 0.5) * step, z, rgb);
+      raw.set(rgb, (j * res + i) * 3);
+    }
+  }
+  await sharp(raw, { raw: { width: res, height: res, channels: 3 } })
+    .jpeg({ quality: 84, mozjpeg: true })
+    .toFile(path.join(OUT, 'imagery_princeton.jpg'));
+  await writeMeta({ towns: [{ id: cfg.id, name: cfg.name, center: town.center, size: cfg.size, imageRes: res }] });
 };
 
 const wanted = process.argv.slice(2);
