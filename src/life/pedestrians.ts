@@ -13,48 +13,99 @@ const LIMB = { BODY: 0, LEG_L: 1, LEG_R: 2, ARM_L: 3, ARM_R: 4 };
 const SLOT = { SKIN: 0, TOP: 1, BOTTOM: 2, SHOES: 3, HAIR: 4, LEGS: 5 };
 const VAR = { ALWAYS: 0, DRESS: 1, LONG_HAIR: 2 };
 
+/** Lower-limb segments bend at the knee or elbow, on top of the hip or shoulder swing. */
+const SEG = { NONE: 0, SHIN: 1, FOREARM: 2 };
+const HIP = 0.9, KNEE = 0.5, SH = 1.4, ELBOW = 1.13;
+
 function personGeometry(): THREE.BufferGeometry {
   const pos: number[] = [];
   const nrm: number[] = [];
   const part: number[] = [];
-  const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, limb: number, slot: number, variant: number, pivot: number, taper = 0) => {
-    const g = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0).toNonIndexed();
-    g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
-    const p = g.attributes.position.array as Float32Array;
-    if (taper) {
-      // Flare the bottom (skirts and dresses).
-      for (let i = 0; i < p.length; i += 3) {
-        if (p[i + 1] < (y0 + y1) / 2) {
-          p[i] = (x0 + x1) / 2 + (p[i] - (x0 + x1) / 2) * (1 + taper);
-          p[i + 2] = (z0 + z1) / 2 + (p[i + 2] - (z0 + z1) / 2) * (1 + taper);
-        }
-      }
-      g.computeVertexNormals();
-    }
-    pos.push(...p);
+  const seg: number[] = [];
+  const idx: number[] = [];
+  const add = (g: THREE.BufferGeometry, limb: number, slot: number, variant: number, pivot: number, sg = SEG.NONE) => {
+    if (!g.attributes.normal) g.computeVertexNormals();
+    const base = pos.length / 3;
+    pos.push(...(g.attributes.position.array as Float32Array));
     nrm.push(...(g.attributes.normal.array as Float32Array));
-    for (let i = 0; i < p.length / 3; i++) part.push(limb, slot, variant, pivot);
+    const n = g.attributes.position.count;
+    for (let i = 0; i < n; i++) {
+      part.push(limb, slot, variant, pivot);
+      seg.push(sg);
+    }
+    if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
+    else for (let i = 0; i < n; i++) idx.push(base + i);
   };
-  const HIP = 0.9, SH = 1.42;
+  /** Tapered limb between two points, rounded at both ends. */
+  const limbGeo = (a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number) => {
+    const len = a.distanceTo(b);
+    const pts: THREE.Vector2[] = [];
+    for (let k = 0; k <= 3; k++) {
+      const t = (k / 3) * Math.PI * 0.5;
+      pts.push(new THREE.Vector2(Math.sin(t) * r1, len + Math.cos(t) * r1 * 0.6));
+    }
+    pts.reverse();
+    // Muscle swell a third of the way down.
+    pts.push(new THREE.Vector2(r0 * 1.04 + (r1 - r0) * 0.3, len * 0.66));
+    for (let k = 0; k <= 3; k++) {
+      const t = (k / 3) * Math.PI * 0.5;
+      pts.push(new THREE.Vector2(Math.cos(t) * r0, -Math.sin(t) * r0 * 0.6));
+    }
+    pts.reverse();
+    const g = new THREE.LatheGeometry(pts, 8);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+    g.applyMatrix4(new THREE.Matrix4().compose(a, q, new THREE.Vector3(1, 1, 1)));
+    return g;
+  };
+  /** Body-of-revolution trunk section, flattened front to back. */
+  const lathe = (profile: [number, number][], depth: number, segs = 10) => {
+    const g = new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), segs);
+    g.scale(1, 1, depth);
+    g.computeVertexNormals();
+    return g;
+  };
+  const ellipsoid = (x: number, y: number, z: number, rx: number, ry: number, rz: number, phiLen = Math.PI) => {
+    const g = new THREE.SphereGeometry(1, 10, 7, 0, Math.PI * 2, 0, phiLen);
+    g.scale(rx, ry, rz).translate(x, y, z);
+    return g;
+  };
+  const V = (x: number, y: number, z = 0) => new THREE.Vector3(x, y, z);
+
   for (const [s, limb] of [[-1, LIMB.LEG_L], [1, LIMB.LEG_R]] as const) {
-    box(s * 0.16, 0.08, -0.07, s * 0.03, HIP, 0.07, limb, SLOT.LEGS, VAR.ALWAYS, HIP);
-    box(s * 0.165, 0.0, -0.08, s * 0.025, 0.09, 0.15, limb, SLOT.SHOES, VAR.ALWAYS, HIP);
+    add(limbGeo(V(s * 0.095, KNEE), V(s * 0.09, HIP + 0.02), 0.056, 0.078), limb, SLOT.LEGS, VAR.ALWAYS, HIP);
+    add(limbGeo(V(s * 0.1, 0.09), V(s * 0.095, KNEE), 0.036, 0.054), limb, SLOT.LEGS, VAR.ALWAYS, HIP, SEG.SHIN);
+    // Shoe: a low rounded wedge, toe forward (+z).
+    const shoe = ellipsoid(s * 0.1, 0.045, 0.05, 0.05, 0.05, 0.13, Math.PI * 0.62);
+    add(shoe, limb, SLOT.SHOES, VAR.ALWAYS, HIP, SEG.SHIN);
+    add(ellipsoid(s * 0.1, 0.045, 0.05, 0.05, 0.02, 0.13), limb, SLOT.SHOES, VAR.ALWAYS, HIP, SEG.SHIN);
   }
-  box(-0.17, 0.82, -0.1, 0.17, 1.02, 0.1, LIMB.BODY, SLOT.BOTTOM, VAR.ALWAYS, 0);
-  box(-0.19, 1.0, -0.11, 0.19, 1.46, 0.11, LIMB.BODY, SLOT.TOP, VAR.ALWAYS, 0);
-  box(-0.18, 0.5, -0.12, 0.18, 1.02, 0.12, LIMB.BODY, SLOT.BOTTOM, VAR.DRESS, 0, 0.35);
+  // Pelvis (trousers) and the chest above it.
+  add(lathe([[0.001, 0.84], [0.15, 0.86], [0.165, 0.92], [0.155, 1.0], [0.14, 1.04]], 0.66), LIMB.BODY, SLOT.BOTTOM, VAR.ALWAYS, 0);
+  add(lathe([[0.138, 1.0], [0.142, 1.08], [0.165, 1.2], [0.185, 1.3], [0.19, 1.37], [0.16, 1.44], [0.07, 1.48], [0.001, 1.485]], 0.62), LIMB.BODY, SLOT.TOP, VAR.ALWAYS, 0);
+  // Dress / skirt flaring from the waist.
+  add(lathe([[0.15, 1.04], [0.17, 0.92], [0.22, 0.7], [0.25, 0.52], [0.001, 0.52]], 0.75), LIMB.BODY, SLOT.BOTTOM, VAR.DRESS, 0);
   for (const [s, limb] of [[-1, LIMB.ARM_L], [1, LIMB.ARM_R]] as const) {
-    box(s * 0.28, 1.0, -0.05, s * 0.19, SH + 0.03, 0.05, limb, SLOT.TOP, VAR.ALWAYS, SH);
-    box(s * 0.275, 0.8, -0.045, s * 0.195, 1.0, 0.045, limb, SLOT.SKIN, VAR.ALWAYS, SH);
+    add(ellipsoid(s * 0.18, SH - 0.005, 0, 0.065, 0.06, 0.06), limb, SLOT.TOP, VAR.ALWAYS, SH);
+    add(limbGeo(V(s * 0.215, ELBOW), V(s * 0.19, SH), 0.04, 0.05), limb, SLOT.TOP, VAR.ALWAYS, SH);
+    add(limbGeo(V(s * 0.225, 0.87), V(s * 0.215, ELBOW), 0.029, 0.037), limb, SLOT.SKIN, VAR.ALWAYS, SH, SEG.FOREARM);
+    add(ellipsoid(s * 0.228, 0.8, 0.008, 0.026, 0.06, 0.04), limb, SLOT.SKIN, VAR.ALWAYS, SH, SEG.FOREARM);
   }
-  box(-0.05, 1.45, -0.05, 0.05, 1.53, 0.05, LIMB.BODY, SLOT.SKIN, VAR.ALWAYS, 0);
-  box(-0.095, 1.52, -0.1, 0.095, 1.76, 0.11, LIMB.BODY, SLOT.SKIN, VAR.ALWAYS, 0);
-  box(-0.105, 1.66, -0.12, 0.105, 1.79, 0.09, LIMB.BODY, SLOT.HAIR, VAR.ALWAYS, 0);
-  box(-0.11, 1.28, -0.14, 0.11, 1.72, -0.06, LIMB.BODY, SLOT.HAIR, VAR.LONG_HAIR, 0);
+  // Neck, head, nose and ears; hair as a cap over the crown.
+  add(limbGeo(V(0, 1.44), V(0, 1.56), 0.048, 0.044), LIMB.BODY, SLOT.SKIN, VAR.ALWAYS, 0);
+  add(ellipsoid(0, 1.645, 0.01, 0.088, 0.112, 0.1), LIMB.BODY, SLOT.SKIN, VAR.ALWAYS, 0);
+  add(ellipsoid(0, 1.635, 0.105, 0.016, 0.026, 0.022), LIMB.BODY, SLOT.SKIN, VAR.ALWAYS, 0);
+  for (const s of [-1, 1]) add(ellipsoid(s * 0.088, 1.64, 0.0, 0.014, 0.028, 0.02), LIMB.BODY, SLOT.SKIN, VAR.ALWAYS, 0);
+  const cap = ellipsoid(0, 0, 0, 0.096, 0.12, 0.109, Math.PI * 0.56);
+  cap.rotateX(-0.4);
+  cap.translate(0, 1.652, -0.004);
+  add(cap, LIMB.BODY, SLOT.HAIR, VAR.ALWAYS, 0);
+  add(ellipsoid(0, 1.48, -0.07, 0.1, 0.2, 0.06), LIMB.BODY, SLOT.HAIR, VAR.LONG_HAIR, 0);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   g.setAttribute('aPart', new THREE.Float32BufferAttribute(part, 4));
+  g.setAttribute('aSeg', new THREE.Float32BufferAttribute(seg, 1));
+  g.setIndex(idx);
   return g;
 }
 
@@ -64,6 +115,7 @@ const vertex = /* glsl */ `
 uniform vec3 uCamPos;
 uniform float uTime;
 in vec4 aPart;   // limb, colour slot, variant, pivot y
+in float aSeg;   // 1 shin (bends at the knee), 2 forearm (bends at the elbow)
 in vec4 iPos;    // x, y, z, heading
 in vec4 iAnim;   // phase, stride rate, height scale, walking 0/1
 in vec4 iSkin;   // rgb, dress
@@ -89,8 +141,18 @@ void main() {
   float ph = iAnim.x + uTime * iAnim.y;
   float walk = iAnim.w;
   float swing = 0.0;
-  if (limb > 0.5 && limb < 2.5) swing = sin(ph + (limb > 1.5 ? 3.1416 : 0.0)) * 0.42 * walk;
-  else if (limb > 2.5) swing = sin(ph + (limb > 3.5 ? 0.0 : 3.1416)) * 0.35 * walk + (1.0 - walk) * 0.06 * sin(uTime * 1.3 + iAnim.x * 5.0 + limb);
+  float lph = ph + ((limb > 1.5 && limb < 2.5) || (limb > 2.5 && limb < 3.5) ? 3.1416 : 0.0);
+  if (limb > 0.5 && limb < 2.5) swing = sin(lph) * 0.42 * walk;
+  else if (limb > 2.5) swing = sin(lph) * 0.35 * walk + (1.0 - walk) * 0.06 * sin(uTime * 1.3 + iAnim.x * 5.0 + limb);
+  // Knees flex as the leg swings through; elbows carry a little bend.
+  if (aSeg > 0.5) {
+    float bend = aSeg < 1.5 ? (0.08 + 0.95 * pow(max(cos(lph), 0.0), 1.5)) * walk : -(0.12 + 0.3 * walk * (0.5 + 0.5 * sin(lph)));
+    float joint = aSeg < 1.5 ? ${KNEE.toFixed(2)} : ${ELBOW.toFixed(2)};
+    float c = cos(bend), s = sin(bend);
+    vec2 yz = vec2(p.y - joint, p.z);
+    p.yz = vec2(yz.x * c - yz.y * s, yz.x * s + yz.y * c) + vec2(joint, 0.0);
+    n.yz = vec2(n.y * c - n.z * s, n.y * s + n.z * c);
+  }
   if (abs(swing) > 0.0) {
     float c = cos(swing), s = sin(swing);
     vec2 yz = vec2(p.y - aPart.w, p.z);
@@ -229,6 +291,7 @@ export class Pedestrians {
 
     const base = personGeometry();
     this.geo = new THREE.InstancedBufferGeometry();
+    this.geo.index = base.index;
     for (const k of Object.keys(base.attributes)) this.geo.setAttribute(k, base.attributes[k]);
     let seed = 7;
     const rnd = () => {
