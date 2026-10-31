@@ -205,6 +205,69 @@ function obb(ring: [number, number][]) {
   return { cx, cz, w, d, ang };
 }
 
+type Obb = { cx: number; cz: number; w: number; d: number; ang: number };
+
+/**
+ * Splits a near-rectilinear footprint (L, T and U-shaped houses) into
+ * rectangles in its oriented frame, largest first, so each wing can carry its
+ * own roof. Null if the footprint isn't rectilinear.
+ */
+function rectParts(ring: [number, number][], o: Obb): Obb[] | null {
+  const c = Math.cos(o.ang), s = Math.sin(o.ang);
+  const loc: [number, number][] = ring.map(([x, z]) => {
+    const dx = x - o.cx, dz = z - o.cz;
+    return [dx * c + dz * s, -dx * s + dz * c];
+  });
+  for (let i = 0; i < loc.length; i++) {
+    const a = loc[i], b = loc[(i + 1) % loc.length];
+    const du = Math.abs(b[0] - a[0]), dv = Math.abs(b[1] - a[1]);
+    const l = Math.hypot(du, dv);
+    if (l > 0.6 && Math.min(du, dv) / l > 0.2) return null;
+  }
+  const snap = (vals: number[]) => {
+    const out: number[] = [];
+    for (const v of [...vals].sort((a, b) => a - b)) if (!out.length || v - out[out.length - 1] > 0.7) out.push(v);
+    return out;
+  };
+  const us = snap(loc.map((p) => p[0])), vs = snap(loc.map((p) => p[1]));
+  const nu = us.length - 1, nv = vs.length - 1;
+  if (nu < 1 || nv < 1 || nu > 6 || nv > 6) return null;
+  const inside = (i: number, j: number) => insidePoly(loc, (us[i] + us[i + 1]) / 2, (vs[j] + vs[j + 1]) / 2);
+  const used = new Set<number>();
+  const free = (i: number, j: number) => !used.has(i * 8 + j) && inside(i, j);
+  const out: Obb[] = [];
+  for (let j = 0; j < nv; j++)
+    for (let i = 0; i < nu; i++) {
+      if (!free(i, j)) continue;
+      let i1 = i;
+      while (i1 + 1 < nu && free(i1 + 1, j)) i1++;
+      let j1 = j;
+      const rowFree = (jj: number) => {
+        for (let k = i; k <= i1; k++) if (!free(k, jj)) return false;
+        return true;
+      };
+      while (j1 + 1 < nv && rowFree(j1 + 1)) j1++;
+      for (let k = i; k <= i1; k++) for (let jj = j; jj <= j1; jj++) used.add(k * 8 + jj);
+      const u0 = us[i], u1 = us[i1 + 1], v0 = vs[j], v1 = vs[j1 + 1];
+      const um = (u0 + u1) / 2, vm = (v0 + v1) / 2;
+      let w = u1 - u0, d = v1 - v0, ang = o.ang;
+      if (d > w) {
+        [w, d] = [d, w];
+        ang += Math.PI / 2;
+      }
+      out.push({ cx: o.cx + um * c - vm * s, cz: o.cz + um * s + vm * c, w, d, ang });
+    }
+  return out.sort((a, b) => b.w * b.d - a.w * a.d);
+}
+
+function obbRing(o: Obb): [number, number][] {
+  const c = Math.cos(o.ang), s = Math.sin(o.ang);
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([du, dv]) => {
+    const u = (du * o.w) / 2, v = (dv * o.d) / 2;
+    return [o.cx + u * c - v * s, o.cz + u * s + v * c];
+  });
+}
+
 export interface Landmark {
   id: string;
   name: string;
@@ -485,6 +548,9 @@ export class Town {
       }
     }
 
+    // Untagged house roofs default to flat in the map; almost none really are.
+    if (b.k === K.HOUSE && roofForm === ROOF.FLAT && area(ring) < 450) roofForm = hash(s * 13.1) < 0.45 ? ROOF.HIP : ROOF.GABLE;
+
     if (b.k === K.CANOPY) {
       const o = obb(ring);
       const top = yG + b.h;
@@ -501,16 +567,32 @@ export class Town {
     const levels = Math.max(1, b.l);
     const top = yG + h;
     this.walls(out, ring, base, top + parapet, yG, wall, style, storey, levels);
+    const homey = b.k === K.HOUSE || b.k === K.SHED || b.k === K.APARTMENTS;
+    let ridge = top;
     if (roofForm === ROOF.FLAT || b.k === K.COMMERCIAL) {
       this.flatRoof(out, ring, top, roofCol, roofStyle);
+    } else if (homey) {
+      // Each wing of an L or T house under its own roof: cross gables.
+      // Victorians pitch steeply; ranch and stucco houses sit low.
+      const pitch = b.k === K.SHED ? 20 : b.k === K.APARTMENTS ? 26 : style === STYLE.SIDING ? 38 + s * 9 : 21 + s * 9;
+      const o = obb(ring);
+      const parts = rectParts(ring, o) ?? [o];
+      const trim = style === STYLE.SIDING || s > 0.4 ? rgb('#ece9e1') : rgb('#5a4636');
+      parts.forEach((p, i) => {
+        if (i < 4 && Math.min(p.w, p.d) > 2.4 && p.w * p.d > 7) {
+          const hip = roofForm === ROOF.HIP && p.w > p.d * 1.05;
+          this.pitchedRoof(out, p, top, hip, roofCol, roofStyle, wall, style, yG, b.k === K.SHED ? 0.3 : 0.6, pitch, trim);
+          ridge = Math.max(ridge, top + (p.d / 2 + 0.6) * Math.tan((pitch * Math.PI) / 180));
+        } else this.flatRoof(out, obbRing(p), top + 0.05, roofCol, roofStyle);
+      });
+      if (b.k === K.HOUSE) this.houseDetails(out, ring, parts[0], yG, ridge, s, style, roofCol, trim);
     } else {
       const o = obb(ring);
-      this.pitchedRoof(out, o, top, roofForm === ROOF.HIP, roofCol, roofStyle, wall, style, yG, 0.45, b.cp ? 24 : b.k === K.HOUSE ? 42 : 32);
+      this.pitchedRoof(out, o, top, roofForm === ROOF.HIP, roofCol, roofStyle, wall, style, yG, 0.45, b.cp ? 24 : 32);
     }
 
     if (b.id === 'state') this.marquee(out, ring, yG);
     if (b.id === 'hotel') this.hotelTower(out, ring, yG, wall);
-    if (b.k === K.HOUSE && area(ring) < 350 && hash(s * 91.7) < 0.8) this.porch(out, ring, yG, roofCol);
     if (b.k === K.COMMERCIAL && b.d && s > 0.55) this.awning(out, ring, yG, s);
   }
 
@@ -544,7 +626,7 @@ export class Town {
    * Gable or hip roof over an oriented box, eaves at `y` with an overhang.
    * Ridge runs along the long axis; pitch in degrees.
    */
-  private pitchedRoof(out: Builder, o: { cx: number; cz: number; w: number; d: number; ang: number }, y: number, hip: boolean, color: RGB, style: number, wall: RGB, wallStyle: number, yG: number, over: number, pitch: number) {
+  private pitchedRoof(out: Builder, o: Obb, y: number, hip: boolean, color: RGB, style: number, wall: RGB, wallStyle: number, yG: number, over: number, pitch: number, fascia?: RGB) {
     const c = Math.cos(o.ang), s = Math.sin(o.ang);
     const P = (u: number, v: number, h: number): V3 => [o.cx + u * c - v * s, h, o.cz + u * s + v * c];
     const hw = o.w / 2 + over, hd = o.d / 2 + over;
@@ -566,6 +648,89 @@ export class Town {
         const vt = yr - yG, vb = y - yG;
         out.tri(P(e * gw, -gd, y), P(e * gw, gd, y), P(e * gw, 0, yr), wall, wallStyle, [0, vb, 0, 0], [o.d, vb, 0, 0], [o.d / 2, vt, 0, 0]);
       }
+    }
+    if (!fascia) return;
+    // Fascia boards along the eaves and up the rakes, so the roof has an edge.
+    const fb = 0.22;
+    const st = STYLE.CONCRETE;
+    const f0 = [0, 0, 0, 0];
+    for (const e of [-1, 1]) {
+      const a = P(-hw, e * hd, y0), b = P(hw, e * hd, y0);
+      out.quad(a, b, [b[0], b[1] - fb, b[2]], [a[0], a[1] - fb, a[2]], fascia, st, f0, f0, f0, f0);
+      if (!hip) {
+        for (const side of [-1, 1]) {
+          const lo = P(side * hw, e * hd, y0), hi = P(side * hw, 0, yr);
+          out.quad(lo, hi, [hi[0], hi[1] - fb, hi[2]], [lo[0], lo[1] - fb, lo[2]], fascia, st, f0, f0, f0, f0);
+        }
+      }
+    }
+    if (hip) {
+      for (const e of [-1, 1]) {
+        const a = P(e * hw, -hd, y0), b = P(e * hw, hd, y0);
+        out.quad(a, b, [b[0], b[1] - fb, b[2]], [a[0], a[1] - fb, a[2]], fascia, st, f0, f0, f0, f0);
+      }
+    }
+    // Soffit under the overhang.
+    for (const e of [-1, 1]) {
+      const a = P(-hw, e * hd, y0 - fb), b = P(hw, e * hd, y0 - fb);
+      const c2 = P(hw, e * (hd - over), y0 - fb), d2 = P(-hw, e * (hd - over), y0 - fb);
+      out.quad(a, b, c2, d2, fascia, st, f0, f0, f0, f0, [0, -1, 0]);
+    }
+  }
+
+  /**
+   * What makes a box a house: a front door up a couple of steps facing the
+   * street, a porch or a garage, and a brick chimney.
+   */
+  private houseDetails(out: Builder, ring: [number, number][], main: Obb, yG: number, ridge: number, s: number, style: number, roofCol: RGB, trim: RGB) {
+    const e = this.streetEdge(ring);
+    const a2 = area(ring);
+    const garage = !!e && style !== STYLE.SIDING && a2 > 110 && hash(s * 51.3) < 0.75;
+    if (e) {
+      const [a, c, n] = e;
+      const l = Math.hypot(c[0] - a[0], c[1] - a[1]);
+      const tx = (c[0] - a[0]) / l, tz = (c[1] - a[1]) / l;
+      const ang = Math.atan2(tz, tx);
+      const at = (t: number, off: number, y: number): V3 => [a[0] + tx * t + n[0] * off, y, a[1] + tz * t + n[2] * off];
+      const panel = (t0: number, t1: number, y0: number, y1: number, off: number, col: RGB, st: number) => {
+        out.quad(at(t0, off, y0), at(t1, off, y0), at(t1, off, y1), at(t0, off, y1), col, st, [0, 0, 0, 0], [t1 - t0, 0, 0, 0], [t1 - t0, y1 - y0, 0, 0], [0, y1 - y0, 0, 0], n);
+      };
+      let doorT = l * (garage ? 0.62 : hash(s * 7.7) < 0.5 ? 0.5 : 0.35);
+      if (garage && l > 9) {
+        // Two-car door at one end of the frontage, with a concrete apron.
+        const g0 = l - 5.6, g1 = l - 0.6;
+        panel(g0 - 0.12, g1 + 0.12, yG, yG + 2.42, 0.03, trim, STYLE.CONCRETE);
+        panel(g0, g1, yG, yG + 2.3, 0.05, rgb(hash(s * 3.3) < 0.6 ? '#e6e2d8' : '#b9ad98'), STYLE.GARAGE);
+        const mid = at((g0 + g1) / 2, 3, 0);
+        out.box(mid[0], mid[2], yG - 0.35, g1 - g0, 6, 0.38, ang, rgb('#bdb8ad'), STYLE.CONCRETE);
+        doorT = Math.min(doorT, g0 - 1.6);
+      } else if (a2 < 350 && hash(s * 91.7) < 0.8) {
+        this.porch(out, ring, yG, roofCol);
+        doorT = l / 2;
+      }
+      if (doorT > 0.8 && l > 2.5) {
+        const dw = 0.5, dh = 2.15, y0 = yG + 0.45;
+        const doorCol = rgb(['#7a1f1f', '#1f2a3a', '#2a3a2a', '#5a3a22', '#f0ece2', '#1b1b1b', '#8a6a3a'][Math.floor(hash(s * 17.9) * 7)]);
+        panel(doorT - dw - 0.12, doorT + dw + 0.12, y0, y0 + dh + 0.14, 0.03, trim, STYLE.CONCRETE);
+        panel(doorT - dw, doorT + dw, y0, y0 + dh, 0.05, doorCol, STYLE.DOOR);
+        // Steps up to the threshold.
+        for (let k = 0; k < 2; k++) {
+          const p = at(doorT, 0.3 + (1 - k) * 0.3, 0);
+          out.box(p[0], p[2], yG - 0.3, 1.5, 0.6 + (1 - k) * 0.6, 0.3 + k * 0.23, ang, rgb('#b5b0a6'), STYLE.CONCRETE);
+        }
+        // Porch light beside the door.
+        const lp = at(doorT + dw + 0.35, 0.12, yG + 2.3);
+        this.lights.push(lp[0], lp[1], lp[2], 1, 0.75, 0.45, 0.25, 0);
+      }
+    }
+    // Chimney at one end of the main roof, through the eaves to above the ridge.
+    if (hash(s * 29.3) < 0.5 && main.w > 6) {
+      const c = Math.cos(main.ang), sn = Math.sin(main.ang);
+      const side = hash(s * 4.1) < 0.5 ? -1 : 1;
+      const u = side * (main.w / 2 - 0.9), v = (hash(s * 8.3) - 0.5) * main.d * 0.3;
+      const x = main.cx + u * c - v * sn, z = main.cz + u * sn + v * c;
+      out.box(x, z, yG - 0.3, 0.75, 0.75, ridge - yG + 1.1, main.ang, rgb('#8a4b38'), STYLE.CHIMNEY);
+      out.box(x, z, ridge + 0.8, 0.9, 0.9, 0.14, main.ang, rgb('#6b6560'), STYLE.CONCRETE);
     }
   }
 
