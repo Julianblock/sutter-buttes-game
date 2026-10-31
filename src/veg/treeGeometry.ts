@@ -99,7 +99,7 @@ function limb(b: GeoBuilder, from: THREE.Vector3, to: THREE.Vector3, r0: number,
   cyl.translate(0, len / 2, 0);
   const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
   const m = new THREE.Matrix4().compose(from, q, new THREE.Vector3(1, 1, 1));
-  b.addMesh(cyl.toNonIndexed(), m, new THREE.Vector3(0, 0.5, 0), TREE_PART.BARK);
+  b.addMesh(cyl, m, new THREE.Vector3(0, 0.5, 0), TREE_PART.BARK);
 }
 
 /** A crooked limb: two segments with a kink, so branches never look like dowels. */
@@ -266,7 +266,7 @@ function palm(b: GeoBuilder, detail: 0 | 1 | 2, r: () => number) {
   // Dead-frond skirt: a shaggy cone of thatch.
   const skirt = new THREE.CylinderGeometry(0.07, 0.04, H * 0.2, detail === 0 ? 10 : 5, 2, true);
   skirt.translate(0, -H * 0.1, 0);
-  b.addMesh(skirt.toNonIndexed(), new THREE.Matrix4().makeTranslation(top.x, top.y + 0.02, top.z), top, TREE_PART.THATCH, (p) => {
+  b.addMesh(skirt, new THREE.Matrix4().makeTranslation(top.x, top.y + 0.02, top.z), top, TREE_PART.THATCH, (p) => {
     if (p.y > -H * 0.15) return;
     p.x *= 0.92 + 0.16 * Math.sin(p.z * 80);
     p.z *= 0.92 + 0.16 * Math.sin(p.x * 70);
