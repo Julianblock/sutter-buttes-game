@@ -4,6 +4,7 @@ import type { ShadowMap } from '../render/shadows';
 import { TREE, type PlantedTree } from '../veg/trees';
 import { STYLE, townFragment, townVertex } from '../render/shaders/townShader';
 import { Decks } from './decks';
+import { Signs, type SignSpec } from './signs';
 import type { Heightfield } from './heightfield';
 import type { OsmData, TownBridge, TownBuilding, TownData } from './meta';
 import { roadSpec } from './roads';
@@ -295,6 +296,7 @@ export class Town {
   readonly lights: number[] = [];
   readonly decks: Decks;
   readonly landmarks: Landmark[] = [];
+  readonly signs = new Signs();
   readonly name: string;
   readonly cx: number;
   readonly cz: number;
@@ -341,6 +343,28 @@ export class Town {
       this.chunks.push({ mesh, geo, center: geo.boundingSphere!.center, radius: geo.boundingSphere!.radius });
     }
     hf.decks = this.decks;
+    this.group.add(this.signs.group);
+  }
+
+  /** A sign flat on the street face of a footprint, centred, `y` above the ground. */
+  private placard(ring: [number, number][], y: number, text: string, maxW: number, h: number, o: Partial<SignSpec> = {}) {
+    const e = this.streetEdge(ring);
+    if (!e) return;
+    const [a, c, n] = e;
+    const l = Math.hypot(c[0] - a[0], c[1] - a[1]);
+    const off = o.open ? 0.25 : 0.12;
+    this.signs.add({
+      text,
+      x: (a[0] + c[0]) / 2 + n[0] * off,
+      y,
+      z: (a[1] + c[1]) / 2 + n[2] * off,
+      w: Math.min(maxW, l * 0.85),
+      h,
+      yaw: Math.atan2(n[0], n[2]),
+      bg: '#1a1a1a',
+      fg: '#e8d6a0',
+      ...o,
+    });
   }
 
   /** Inside the zone the town draws itself (generic props stand down). */
@@ -592,7 +616,26 @@ export class Town {
     }
 
     if (b.id === 'state') this.marquee(out, ring, yG);
-    if (b.id === 'hotel') this.hotelTower(out, ring, yG, wall);
+    if (b.id === 'hotel') {
+      this.hotelTower(out, ring, yG, wall);
+      // The red neon letters on the roof, a downtown beacon since the 1920s.
+      const e = this.streetEdge(ring);
+      if (e) {
+        const [a, c, n] = e;
+        const mx = (a[0] + c[0]) / 2 - n[0] * 3, mz = (a[1] + c[1]) / 2 - n[2] * 3;
+        const sy = top + parapet + 2.2;
+        this.signs.add({ text: 'HOTEL MARYSVILLE', x: mx, y: sy, z: mz, w: 22, h: 2.6, yaw: Math.atan2(n[0], n[2]), bg: '#000', fg: '#ff3b2a', glow: true, open: true, font: 'Impact, "Arial Black", sans-serif' });
+        const tx = -n[2], tz = n[0];
+        for (let k = -2; k <= 2; k++) {
+          const px = mx + tx * k * 5 - n[0] * 0.3, pz = mz + tz * k * 5 - n[2] * 0.3;
+          out.box(px, pz, top + parapet, 0.12, 0.12, 3.6, Math.atan2(tz, tx), rgb('#3a3632'), STYLE.STEEL, false);
+        }
+        out.beam([mx - tx * 11, top + parapet + 0.9, mz - tz * 11], [mx + tx * 11, top + parapet + 0.9, mz + tz * 11], 0.1, 0.1, rgb('#3a3632'), STYLE.STEEL);
+      }
+    }
+    if (b.id === 'courthouse') this.placard(ring, yG + 6.4, 'YUBA COUNTY COURTHOUSE', 20, 1.1, { bg: '#d6cfc2', fg: '#7a5a2a', font: 'Optima, Futura, sans-serif' });
+    if (b.id === 'aaron') this.placard(ring, yG + 2.9, 'MARY AARON MUSEUM', 5, 0.7, { bg: '#2a3a2a', fg: '#e8d6a0' });
+    if (b.id === 'chinesemuseum') this.placard(ring, yG + 3.3, 'CHINESE AMERICAN MUSEUM', 8, 0.8, { bg: '#7a1414', fg: '#f0c850' });
     if (b.k === K.COMMERCIAL && b.d && s > 0.55) this.awning(out, ring, yG, s);
   }
 
@@ -884,6 +927,28 @@ export class Town {
       this.lights.push(x, yG + 3.45, z, 1, 0.78, 0.45, 0.35, 0);
     }
     this.lights.push(px + n[0] * 1.2, yG + 3.2, pz + n[2] * 1.2, 1, 0.85, 0.6, 1.6, 0);
+    // The vertical STATE blade sign above the marquee.
+    const bx = mx + n[0] * 1.1, bz = mz + n[2] * 1.1;
+    this.signs.add({ text: 'STATE', x: bx, y: yG + 9.2, z: bz, w: 1.7, h: 8, yaw: Math.atan2(t[0], t[1]), bg: '#1d2a4a', fg: '#ffd36a', glow: true, vertical: true, font: '"Arial Black", Impact, sans-serif' });
+    out.box(mx + n[0] * 0.5, mz + n[2] * 0.5, yG + 5.1, 0.12, 1.0, 8.2, ang, rgb('#2a2a2a'), STYLE.STEEL, false);
+  }
+
+  /**
+   * Ornamental ridge on a Chinese temple roof: a raised crest of glazed tile
+   * whose ends sweep up into swallowtails, with a pearl at the centre.
+   */
+  private ridgeCrest(out: Builder, cx: number, cz: number, ang: number, len: number, y: number) {
+    const c = Math.cos(ang), s = Math.sin(ang);
+    const crest = rgb('#5d6b5a'), gold = rgb('#c9a84a');
+    const half = len / 2;
+    out.beam([cx - c * half, y + 0.2, cz - s * half], [cx + c * half, y + 0.2, cz + s * half], 0.35, 0.45, crest, STYLE.ROOF_TILE);
+    for (const e of [-1, 1]) {
+      const ex = cx + c * e * half, ez = cz + s * e * half;
+      out.beam([ex, y + 0.2, ez], [ex + c * e * 0.9, y + 1.25, ez + s * e * 0.9], 0.3, 0.3, crest, STYLE.ROOF_TILE);
+      out.beam([ex + c * e * 0.9, y + 1.25, ez + s * e * 0.9], [ex + c * e * 0.6, y + 1.7, ez + s * e * 0.6], 0.2, 0.2, crest, STYLE.ROOF_TILE);
+    }
+    out.prism(cx, cz, y + 0.42, 0.22, 0.22, 0.3, 8, gold, STYLE.STEEL);
+    out.prism(cx, cz, y + 0.72, 0.22, 0.0, 0.35, 8, gold, STYLE.STEEL);
   }
 
   // ---------------------------------------------------------------- landmarks
@@ -1012,12 +1077,16 @@ export class Town {
       // Long axis runs north-south: two gables side by side across the width.
       for (const side of [-1, 1]) {
         const off = side * o.d / 4;
-        this.pitchedRoof(out, { cx: o.cx - s * off, cz: o.cz + c * off, w: o.w, d: o.d / 2, ang: o.ang }, yG + h, false, tile, STYLE.ROOF_TILE, white, STYLE.STUCCO, yG, 0.35, 30);
+        const rcx = o.cx - s * off, rcz = o.cz + c * off;
+        this.pitchedRoof(out, { cx: rcx, cz: rcz, w: o.w, d: o.d / 2, ang: o.ang }, yG + h, false, tile, STYLE.ROOF_TILE, white, STYLE.STUCCO, yG, 0.35, 30);
+        this.ridgeCrest(out, rcx, rcz, o.ang, o.w, yG + h + (o.d / 4 + 0.35) * Math.tan(Math.PI / 6));
       }
     } else {
       for (const side of [-1, 1]) {
         const off = side * o.w / 4;
-        this.pitchedRoof(out, { cx: o.cx + c * off, cz: o.cz + s * off, w: o.d, d: o.w / 2, ang: o.ang + Math.PI / 2 }, yG + h, false, tile, STYLE.ROOF_TILE, white, STYLE.STUCCO, yG, 0.35, 30);
+        const rcx = o.cx + c * off, rcz = o.cz + s * off;
+        this.pitchedRoof(out, { cx: rcx, cz: rcz, w: o.d, d: o.w / 2, ang: o.ang + Math.PI / 2 }, yG + h, false, tile, STYLE.ROOF_TILE, white, STYLE.STUCCO, yG, 0.35, 30);
+        this.ridgeCrest(out, rcx, rcz, o.ang + Math.PI / 2, o.d, yG + h + (o.w / 4 + 0.35) * Math.tan(Math.PI / 6));
       }
     }
     // Porch: red columns and lintel along the south face.
@@ -1034,8 +1103,20 @@ export class Town {
     }
     out.beam([px - lx * span * 0.4, yG + h - 0.35, pz - lz * span * 0.4], [px + lx * span * 0.4, yG + h - 0.35, pz + lz * span * 0.4], 0.35, 0.4, red, STYLE.LACQUER);
     out.box(px - fwx * 0.45, pz - fwz * 0.45, yG + h - 0.6, span * 0.85, 1.0, 0.2, Math.atan2(lz, lx), tile, STYLE.ROOF_TILE);
-    // Red lanterns at the door.
-    for (const e of [-1, 1]) this.lights.push(px + lx * e * 1.4, yG + 3.0, pz + lz * e * 1.4, 1, 0.12, 0.05, 0.6, 0);
+    // Red double doors, a gilded name plaque above them, red lanterns either side.
+    const fx = o.cx + fwx * (half + 0.03), fz = o.cz + fwz * (half + 0.03);
+    const door: V3[] = [[fx - lx * 1.1, yG, fz - lz * 1.1], [fx + lx * 1.1, yG, fz + lz * 1.1], [fx + lx * 1.1, yG + 2.9, fz + lz * 1.1], [fx - lx * 1.1, yG + 2.9, fz - lz * 1.1]];
+    const f0 = [0, 0, 0, 0];
+    out.quad(door[0], door[1], door[2], door[3], red, STYLE.LACQUER, f0, f0, f0, f0, [fwx, 0, fwz]);
+    this.signs.add({ text: '北溪廟', x: fx + fwx * 0.05, y: yG + 3.55, z: fz + fwz * 0.05, w: 2.6, h: 0.8, yaw: Math.atan2(fwx, fwz), bg: '#141414', fg: '#e6c04a', glow: true, font: '"PingFang TC", "Hiragino Sans CNS", "Songti TC", serif' });
+    const lantern = rgb('#c81e14');
+    for (const e of [-1, 1]) {
+      const qx = px + lx * e * 1.4, qz = pz + lz * e * 1.4;
+      out.prism(qx, qz, yG + 2.7, 0.2, 0.32, 0.25, 10, lantern, STYLE.LACQUER);
+      out.prism(qx, qz, yG + 2.95, 0.32, 0.2, 0.25, 10, lantern, STYLE.LACQUER);
+      out.beam([qx, yG + 3.2, qz], [qx, yG + h - 0.5, qz], 0.02, 0.02, rgb('#222'), STYLE.STEEL);
+      this.lights.push(qx, yG + 3.0, qz, 1, 0.12, 0.05, 0.6, 0);
+    }
   }
 
   // ------------------------------------------------------------------ bridges
