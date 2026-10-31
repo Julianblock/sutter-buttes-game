@@ -887,9 +887,12 @@ export class Town {
   streetTrees(): PlantedTree[] {
     const out: PlantedTree[] = [];
     const KINDS = new Set(['residential', 'tertiary', 'secondary', 'unclassified', 'living_street']);
-    for (const r of this.osm.roads) {
-      if (!KINDS.has(r.kind)) continue;
+    this.osm.roads.forEach((r, ri) => {
+      if (!KINDS.has(r.kind)) return;
       const half = roadSpec(r).half;
+      // Each street was planted with one species: fan-palm avenues, oak and
+      // sycamore canopies, rows of elms.
+      const plan = hash(ri * 7.13 + 0.5);
       const p = r.pts;
       let carry = 0;
       for (let i = 0; i + 3 < p.length; i += 2) {
@@ -912,19 +915,17 @@ export class Town {
             if (this.frontage(x, z, tx, tz, 3) < 3 || this.frontage(x, z, -tx, -tz, 3) < 3) continue;
             const w = this.water.sample(x, z);
             if (w.mask > 0.3) continue;
-            const big = hash(h * 31.7) < 0.6;
-            out.push({
-              x,
-              z,
-              r: big ? 4.5 + h * 2.0 : 3.2 + h * 1.4,
-              h: big ? 11 + h * 5 : 7.5 + h * 3,
-              sp: big ? TREE.VALLEY_OAK : TREE.COTTONWOOD,
-            });
+            const odd = hash(h * 31.7);
+            if (odd < 0.07) out.push({ x, z, r: 2.6 + h, h: 12 + h * 8, sp: TREE.CONIFER });
+            else if (plan < 0.2) out.push({ x, z, r: 2.3 + h * 0.5, h: 13 + h * 9, sp: TREE.PALM });
+            else if (plan < 0.6) out.push({ x, z, r: 4.5 + h * 2.0, h: 11 + h * 5, sp: TREE.VALLEY_OAK });
+            else if (plan < 0.82) out.push({ x, z, r: 4 + h * 1.5, h: 10 + h * 4, sp: TREE.WALNUT });
+            else out.push({ x, z, r: 3.2 + h * 1.4, h: 9 + h * 4, sp: TREE.COTTONWOOD });
           }
         }
         carry = s - l;
       }
-    }
+    });
     return out;
   }
 
