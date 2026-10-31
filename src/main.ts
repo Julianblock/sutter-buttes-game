@@ -58,6 +58,7 @@ import { TouchControls } from './ui/touch';
 import { Town } from './world/town';
 import { Walker } from './walk/walker';
 import { MapView } from './ui/map';
+import { LearnTour, placeStops, type LearnStop } from './ui/learn';
 import { Nightmare } from './horror/nightmare';
 import { Horror } from './horror/horror';
 import { Haunts } from './horror/haunts';
@@ -249,7 +250,67 @@ async function boot() {
     allTowns.flatMap((t) => t.landmarks),
   );
   map.fiction = haunts.list;
-  ui.append(menu.root, hud.root, hud.help, journal.root, map.root, horror.root);
+
+  // Learn mode: every easter egg, lore spot and landmark, in touring order.
+  const findWater = (name: RegExp, gx: number, gz: number, r: number) => {
+    let best: { x: number; z: number } | null = null;
+    let bd = Infinity;
+    const step = r / 60;
+    for (let z = gz - r; z <= gz + r; z += step)
+      for (let x = gx - r; x <= gx + r; x += step) {
+        const d = Math.hypot(x - gx, z - gz);
+        if (d >= bd || water.sample(x, z).mask < 0.6) continue;
+        const b = water.bodyAt(x, z);
+        if (b && name.test(b.name)) (bd = d), (best = { x, z });
+      }
+    return best;
+  };
+  const findLand = (codes: number[], gx: number, gz: number, r: number) => {
+    for (let ring = 0; ring <= r; ring += 150)
+      for (let k = 0; k < Math.max(1, ring / 40); k++) {
+        const a = (k / Math.max(1, ring / 40)) * Math.PI * 2;
+        const x = gx + Math.cos(a) * ring, z = gz + Math.sin(a) * ring;
+        if (codes.includes(heightfield.landcover(x, z))) return { x, z };
+      }
+    return null;
+  };
+  const tourStops: LearnStop[] = lore.tour(findWater);
+  if (witches) {
+    const at = tourStops.findIndex((t) => t.id === 'witches-cemetery');
+    tourStops.splice(at + 1, 0, {
+      id: 'ghosts',
+      kind: 'secret',
+      kicker: 'North Butte Cemetery · after dark',
+      title: 'You are not alone',
+      text: 'Some say the old cemetery under North Butte is not as empty as it looks once the sun goes down.',
+      at: { x: witches.cx, z: witches.cz, alt: 10, setup: 'night', hint: 'Return to the North Butte Cemetery after dark and look among the stones.' },
+    });
+  }
+  const landmarkAt = (id: string) => allTowns.map((t) => t.landmark(id)).find((l) => !!l) ?? null;
+  const AFTER: Record<string, string[]> = {
+    'west-butte': ['place-peace-valley'],
+    'butte-creek': ['place-butte-sink', 'place-gray-lodge'],
+    sacramento: ['place-rice', 'place-bypass', 'place-sutter-nwr'],
+    'truck-underwater': ['place-orchards'],
+    marysville: ['place-ellis-lake', 'place-hotel', 'place-state', 'place-aaron'],
+    bokkai: ['place-chinese'],
+  };
+  const extra = placeStops(landmarkAt, findLand, LC);
+  for (const [after, ids] of Object.entries(AFTER)) {
+    const i = tourStops.findIndex((t) => t.id === after);
+    const add = ids.map((id) => extra.find((e) => e.id === id)).filter((e): e is LearnStop => !!e);
+    if (i >= 0) tourStops.splice(i + 1, 0, ...add);
+    else tourStops.push(...add);
+  }
+  const learn = new LearnTour(tourStops, (id) => journal.has(id));
+  map.stops = tourStops;
+  map.found = (id) => journal.has(id);
+  const prevFind = journal.onFind;
+  journal.onFind = (d) => {
+    prevFind?.(d);
+    learn.render();
+  };
+  ui.append(menu.root, hud.root, hud.help, journal.root, map.root, horror.root, learn.root);
   const touch = isTouch ? new TouchControls(controls) : null;
   if (touch) {
     document.body.classList.add('touch');
@@ -468,6 +529,60 @@ async function boot() {
       chase.snapFrom(cam, player.object.position);
     }
   };
+  /** Learn mode: fly (or drive) to a tour stop, setting up whatever the find needs. */
+  let learnSky: 'night' | 'snow' | null = null;
+  learn.onGo = (st) => {
+    const a = st.at;
+    if (mode !== 'fly') setMode('fly');
+    if (map.open) map.toggle(false);
+    if (a.setup === 'night' && G.uNight.value < 0.6) env.setPreset('night');
+    if (a.setup === 'day' && G.uNight.value > 0.3) env.setPreset('afternoon');
+    if (a.setup === 'snow') env.setWeather('snow');
+    // Undo the tour's own night or snow once it moves on.
+    if (learnSky && a.setup !== learnSky) {
+      if (learnSky === 'snow') env.setWeather('clear');
+      else if (a.setup !== 'day') env.setPreset('afternoon');
+    }
+    learnSky = a.setup === 'night' || a.setup === 'snow' ? a.setup : null;
+    if (a.setup === 'drive') {
+      if (walking) setWalking(false);
+      const r = roadIndex.nearest(a.x, a.z, 900);
+      const x = r ? r.x : a.x - 40, z = r ? r.z : a.z;
+      if (!driving) setDriving(true);
+      car.place(x, z, Math.atan2(a.x - x, a.z - z));
+      driveCam.reset();
+      return;
+    }
+    if (driving) setDriving(false);
+    if (walking) setWalking(false);
+    const ground = heightfield.height(a.x, a.z);
+    if (a.setup === 'dive') {
+      const w = water.sample(a.x, a.z);
+      player.flight.spawn(a.x, ground + Math.max(0.6, w.depth * 0.45), a.z, 0);
+    } else {
+      // Arrive a little short of the spot, facing it.
+      const back = Math.min(60, (a.alt ?? 40) * 0.8);
+      const x = a.x + Math.sin(2.4) * back, z = a.z + Math.cos(2.4) * back;
+      const y = a.y ?? ground + (a.alt ?? 40);
+      player.flight.spawn(x, Math.max(y, heightfield.height(x, z) + 4), z, Math.atan2(a.x - x, a.z - z));
+    }
+    chase.cut();
+  };
+  learn.onMap = () => {
+    if (mode !== 'fly') setMode('fly');
+    map.fit(actorPos().x, actorPos().z);
+    map.toggle(true);
+    walker.release();
+    drive.release();
+  };
+  map.onPick = (id) => learn.pick(id);
+  const actorPos = () => (walking ? walker.pos : driving ? car.physics.pos : player.flight.pos);
+  menu.onLearn = () => {
+    sound.start();
+    immerse();
+    learn.show(true);
+    learn.go();
+  };
   const travel = () => {
     if (!menu.place) return;
     goTo(menu.place);
@@ -502,6 +617,11 @@ async function boot() {
   setMode(mode);
 
   addEventListener('keydown', (e) => {
+    if (mode === 'fly' && !e.repeat && learn.key(e)) return e.preventDefault();
+    if (e.code === 'KeyJ' && mode === 'fly' && !e.repeat) {
+      learn.show(!learn.active);
+      return;
+    }
     if (e.code === 'Tab' && mode === 'fly') {
       e.preventDefault();
       map.toggle();
@@ -857,6 +977,8 @@ async function boot() {
     shadow.update(engine.renderer, focus);
     G.uInvExposure.value = 1 / env.exposure;
     updateSound(dt);
+    learn.update(dt);
+    map.current = learn.active ? (learn.stops[learn.index]?.id ?? null) : null;
     if (map.open) map.draw(actor.x, actor.z, walking ? walker.yaw + Math.PI : driving ? car.physics.psi : player.flight.psi);
     sky.update(cam, env.exposure);
     engine.render(env.exposure, G.uNight.value, G.uTime.value);
@@ -866,7 +988,7 @@ async function boot() {
   frame();
   loading.done();
   Object.assign(window, {
-    town, villages, pedestrians, touch, engine, env, terrain, water, waterSurface, fish, ghosts, volcano, journal, lore, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
+    town, villages, pedestrians, learn, actorPos, touch, engine, env, terrain, water, waterSurface, fish, ghosts, volcano, journal, lore, heightfield, G, player, chase, air, car, driveCam, roadIndex, fences, dust, drive, shadow, precip, cemeteries, controls, menu, hud, places, trees, props, lights, traffic, wildlife, flocks, sound, power, grass,
     inspectView: (a: number, h: number) => ((inspectAngle = a), (inspectHeight = h)),
     /** Renders a frame and returns it as a JPEG data URL (debug capture). */
     snap: (w = 1100, x0 = 0, y0 = 0, cw = 1, ch = 1) => {
