@@ -1,4 +1,5 @@
 import { latLonToLocal, localToLatLon, formatLatLon } from '../world/geo';
+import type { LearnStop } from './learn';
 
 export interface MapSource {
   bmp: ImageBitmap;
@@ -24,6 +25,13 @@ export class MapView {
   /** Invented places (Nightmare), drawn in red and labelled as fiction. */
   fiction: { name: string; x: number; z: number }[] = [];
   showFiction = false;
+  /** Easter eggs, lore spots and landmarks: found ones gold, the rest still a question. */
+  stops: LearnStop[] = [];
+  found: (id: string) => boolean = () => false;
+  current: string | null = null;
+  onPick?: (id: string) => void;
+  private legend = document.createElement('div');
+  private view = { x0: 0, z0: 0, m: 1 };
 
   constructor(
     private sources: MapSource[],
@@ -31,7 +39,20 @@ export class MapView {
   ) {
     this.root.className = 'map hidden';
     this.readout.className = 'map-readout';
-    this.root.append(this.canvas, this.readout);
+    this.legend.className = 'map-legend';
+    this.legend.innerHTML = '<b>Discoveries</b><span><i class="lg found">★</i>found</span><span><i class="lg todo">?</i>still to find</span><span><i class="lg place">◆</i>landmark</span><em>Click a marker to fly there</em>';
+    this.root.append(this.canvas, this.readout, this.legend);
+    this.root.addEventListener('click', (e) => {
+      const { x0, z0, m } = this.view;
+      let best: LearnStop | null = null;
+      let bd = 16;
+      for (const st of this.stops) {
+        const d = Math.hypot((st.at.x - x0) / m - e.clientX, (st.at.z - z0) / m - e.clientY);
+        if (d < bd) (bd = d), (best = st);
+      }
+      if (best) this.onPick?.(best.id);
+      else if (document.body.classList.contains('touch')) this.toggle(false);
+    });
     this.ctx = this.canvas.getContext('2d')!;
     // Coarse first so finer imagery paints over it.
     this.sources.sort((a, b) => b.size - a.size);
@@ -41,6 +62,13 @@ export class MapView {
     });
     this.root.addEventListener('mousemove', (e) => (this.mouse = { x: e.clientX, y: e.clientY }));
     this.root.addEventListener('mouseleave', () => (this.mouse = null));
+  }
+
+  /** Zooms out until every stop fits round the player. */
+  fit(px: number, pz: number) {
+    let r = 0;
+    for (const st of this.stops) r = Math.max(r, Math.abs(st.at.x - px) / (innerWidth * 0.45), Math.abs(st.at.z - pz) / (innerHeight * 0.42));
+    if (r > 0) this.mpp = Math.min(400, r);
   }
 
   toggle(force?: boolean) {
@@ -113,6 +141,76 @@ export class MapView {
       g.fillText(l.name, x + 8, y + 5);
       g.fillStyle = '#fff';
       g.fillText(l.name, x + 7, y + 4);
+    }
+
+    this.view = { x0, z0, m };
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 260);
+    const boxes: number[][] = [];
+    const sel = this.stops.find((s) => s.id === this.current);
+    g.font = '600 12px system-ui, sans-serif';
+    if (sel) {
+      const [x, y] = toS(sel.at.x, sel.at.z);
+      boxes.push([x - 10, y - 10, x + 16 + g.measureText(sel.title).width, y + 10]);
+    }
+    for (const st of this.stops) {
+      const [x, y] = toS(st.at.x, st.at.z);
+      if (x < -60 || y < -30 || x > W + 60 || y > H + 30) continue;
+      const got = st.kind !== 'place' && this.found(st.id);
+      if (st.id === this.current) {
+        g.strokeStyle = `rgba(255,255,255,${0.5 + 0.5 * pulse})`;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(x, y, 13 + pulse * 5, 0, Math.PI * 2);
+        g.stroke();
+      }
+      g.lineWidth = 2;
+      if (st.kind === 'place') {
+        g.fillStyle = '#6fb6ff';
+        g.strokeStyle = '#0d2236';
+        g.beginPath();
+        g.moveTo(x, y - 7);
+        g.lineTo(x + 6, y);
+        g.lineTo(x, y + 7);
+        g.lineTo(x - 6, y);
+        g.closePath();
+        g.fill();
+        g.stroke();
+      } else if (got) {
+        g.fillStyle = st.kind === 'secret' ? '#b9c4ff' : '#ffd36b';
+        g.strokeStyle = '#2a1e05';
+        g.beginPath();
+        for (let k = 0; k < 10; k++) {
+          const a = -Math.PI / 2 + (k * Math.PI) / 5;
+          const rr = k % 2 ? 4 : 9;
+          g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+        }
+        g.closePath();
+        g.fill();
+        g.stroke();
+      } else {
+        g.fillStyle = 'rgba(20,24,30,0.85)';
+        g.strokeStyle = st.kind === 'secret' ? '#b9c4ff' : '#ffd36b';
+        g.beginPath();
+        g.arc(x, y, 8, 0, Math.PI * 2);
+        g.fill();
+        g.stroke();
+        g.fillStyle = '#fff';
+        g.font = '700 11px system-ui, sans-serif';
+        g.textAlign = 'center';
+        g.fillText('?', x, y + 4);
+        g.textAlign = 'left';
+      }
+      if (m > 60 && st.id !== this.current) continue;
+      g.font = got || st.kind === 'place' ? '600 12px system-ui, sans-serif' : 'italic 500 12px system-ui, sans-serif';
+      if (st.id !== this.current) {
+        const bx = [x - 10, y - 10, x + 16 + g.measureText(st.title).width, y + 10];
+        if (boxes.some((o) => bx[0] < o[2] && bx[2] > o[0] && bx[1] < o[3] && bx[3] > o[1])) continue;
+        boxes.push(bx);
+      }
+      g.fillStyle = 'rgba(0,0,0,0.65)';
+      g.fillText(st.title, x + 13, y + 5);
+      g.fillStyle = got ? '#ffe7a8' : st.kind === 'place' ? '#cfe6ff' : 'rgba(255,255,255,0.8)';
+      g.fillText(st.title, x + 12, y + 4);
     }
 
     if (this.showFiction) {
