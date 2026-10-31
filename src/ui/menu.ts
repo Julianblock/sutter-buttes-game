@@ -45,6 +45,7 @@ export class Menu {
   onFly: () => void = () => {};
   onDrive: () => void = () => {};
   onWalk: () => void = () => {};
+  onLearn: () => void = () => {};
   /** Start point picked in the Places tab, used by the next Take Flight / Drive. */
   place: string | null = null;
 
@@ -77,7 +78,10 @@ export class Menu {
     drive.onclick = () => this.onDrive();
     const walk = el('button', 'cta alt', 'Walk');
     walk.onclick = () => this.onWalk();
-    foot.append(fly, drive, walk, el('div', 'hint', '<kbd>Esc</kbd> returns here · <kbd>G</kbd> truck<br><kbd>B</kbd> on foot · <kbd>H</kbd> controls'));
+    const learn = el('button', 'cta alt learn-cta', 'Learn');
+    learn.title = 'Guided tour of every easter egg, lore spot and landmark';
+    learn.onclick = () => this.onLearn();
+    foot.append(fly, drive, walk, learn, el('div', 'hint', '<kbd>Esc</kbd> returns here · <kbd>G</kbd> truck<br><kbd>B</kbd> on foot · <kbd>J</kbd> learn · <kbd>H</kbd> controls'));
     panel.append(foot);
     this.root.append(panel);
     this.render();
