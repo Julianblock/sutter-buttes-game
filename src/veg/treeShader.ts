@@ -2,7 +2,7 @@ import { lightingCommon } from '../render/shaders/lighting';
 import { noiseCommon } from '../render/shaders/noise';
 import { windCommon } from '../render/shaders/wind';
 
-export const SPECIES_COUNT = 8;
+export const SPECIES_COUNT = 10;
 
 export const treeVertex = /* glsl */ `
 ${noiseCommon}
@@ -14,6 +14,7 @@ uniform vec2 uWind;
 uniform float uLeafAmount[${SPECIES_COUNT}];
 in vec3 aCenter;
 in float aPart;
+in vec4 aCrown; // foliage envelope: centre height, radii
 in vec4 aInst0; // x, y, z, rotation
 in vec4 aInst1; // crown radius, height, species, seed
 #ifdef SHADOW_PASS
@@ -38,17 +39,21 @@ void main() {
   float leaf = aPart;
   float amount = uLeafAmount[sp];
   vec3 c = aCenter;
-  vec3 crownC = vec3(0.0, 0.62, 0.0);
+  vec3 crownC = vec3(0.0, aCrown.x, 0.0);
+  vec3 crownR = aCrown.yzw;
   vec3 n = normal;
   vec3 nCluster = vec3(0.0, 1.0, 0.0);
-  if (leaf > 0.5) {
+  if (leaf > 0.5 && leaf < 2.5) {
     // Bare trees: clusters contract into a twiggy core.
     local = c + (local - c) * mix(0.6, 1.0, amount);
     nCluster = normalize(local - c);
-    vec3 nCrown = normalize((local - crownC) / vec3(0.84, 0.36, 0.84));
-    n = normalize(mix(nCluster, nCrown, 0.6));
-    float shell = length((local - crownC) / vec3(0.9, 0.38, 0.9));
-    vAO = clamp(0.25 + 0.75 * shell, 0.25, 1.0) * mix(0.55, 1.0, smoothstep(0.35, 0.9, local.y));
+    vec3 nCrown = normalize((local - crownC) / crownR);
+    n = normalize(mix(nCluster, nCrown, 0.55));
+    float shell = length((local - crownC) / (crownR * 1.05));
+    vAO = clamp(0.25 + 0.75 * shell, 0.25, 1.0) * mix(0.55, 1.0, smoothstep(crownC.y - crownR.y, crownC.y + crownR.y * 0.8, local.y));
+  } else if (leaf > 2.5) {
+    nCluster = n;
+    vAO = leaf > 3.5 ? 0.6 : 0.9;
   } else {
     vAO = mix(0.35, 0.8, smoothstep(0.0, 0.6, local.y));
   }
@@ -64,7 +69,12 @@ void main() {
   float sway = (sin(ph) + 0.4 * sin(ph * 2.3 + 1.0)) * 0.012 * (0.4 + wind * 0.15) * (0.6 + 1.6 * gust);
   sway += 0.004 * wind * (0.3 + gust);
   sway *= local.y * local.y;
-  if (leaf > 0.5) {
+  if (leaf > 2.5 && leaf < 3.5) {
+    // Palm fans rock and flutter on their long petioles.
+    vec3 d = local - c;
+    float fl = sin(uTime * (3.0 + fract(aInst1.w * 13.0)) + dot(c, vec3(40.0, 0.0, 33.0))) * (0.3 + gust) * (0.4 + wind * 0.15);
+    local.y += fl * 0.03 * length(d.xz);
+  } else if (leaf > 0.5) {
     float ch = fract(sin(dot(c, vec3(12.9, 78.2, 37.7))) * 43758.5);
     float bob = sin(uTime * (2.5 + 2.0 * ch) + ch * 6.28) * 0.012 * (0.3 + gust) * (0.4 + wind * 0.12);
     local += vec3(bob, bob * 0.5, -bob * 0.7);
@@ -139,8 +149,8 @@ vec4 leafCells(vec3 q) {
 void main() {
   #include <logdepthbuf_fragment>
 #ifdef SHADOW_PASS
-  if (vLeaf > 1.5) discard;
-  if (vLeaf > 0.5) {
+  if (vLeaf > 1.5 && vLeaf < 2.5) discard;
+  if (vLeaf > 0.5 && vLeaf < 1.5) {
     float amount = uLeafAmount[vSpecies];
     float nz = vnoise3(vLocal * 9.0 + vSeed * 13.0);
     float fine = vnoise3(vLocal * 31.0 + vSeed * 7.0);
@@ -157,7 +167,17 @@ void main() {
   float amount = uLeafAmount[vSpecies];
   vec3 albedo;
   float thin = 0.0;
-  if (vLeaf > 0.5) {
+  if (vLeaf > 3.5) {
+    // Palm skirt: straw-brown thatch of dead fronds hanging in shaggy strands.
+    float strand = vnoise3(vec3(vWorld.x * 9.0, vWorld.y * 0.8, vWorld.z * 9.0));
+    albedo = mix(vec3(0.36, 0.29, 0.2), vec3(0.55, 0.47, 0.34), strand) * 0.6;
+  } else if (vLeaf > 2.5) {
+    // Palm fans: glossy green leaflets, browning at the tips.
+    float tip = smoothstep(0.55, 1.0, length(vLocal.xz));
+    albedo = uLeafColor[vSpecies] * (0.8 + 0.4 * fract(vSeed * 37.0)) * (0.85 + 0.3 * vnoise3(vLocal * 40.0));
+    albedo = mix(albedo, vec3(0.42, 0.36, 0.22) * 0.6, tip * 0.35);
+    thin = 0.8;
+  } else if (vLeaf > 0.5) {
     float nz = vnoise3(vLocal * 9.0 + vSeed * 13.0);
     float fine = vnoise3(vLocal * 31.0 + vSeed * 7.0);
     // Bare canopies: keep only a sparse lattice of twigs.
@@ -199,7 +219,7 @@ void main() {
     }
     if (inner) leafC *= 0.55;
     // Per-tree autumn variation (some trees turn earlier).
-    leafC = mix(leafC, uFallTint, clamp((fract(vSeed * 53.1) - 0.5) * 0.6, 0.0, 1.0) * float(vSpecies != 1 && vSpecies != 4));
+    leafC = mix(leafC, uFallTint, clamp((fract(vSeed * 53.1) - 0.5) * 0.6, 0.0, 1.0) * float(vSpecies != 1 && vSpecies != 4 && vSpecies < 8));
     // Oak canopy reflects far less than its leaf colour suggests (self-shadowed
     // gaps, waxy dusty leaves): darken and desaturate toward grey-green.
     float lum = dot(leafC, vec3(0.3, 0.55, 0.15));
@@ -213,18 +233,18 @@ void main() {
   }
 
   // Rain darkens bark far more than waxy leaves.
-  albedo = wetten(albedo, vLeaf > 0.5 ? 0.35 : 1.0);
+  albedo = wetten(albedo, vLeaf > 0.5 && vLeaf < 3.5 ? 0.35 : 1.0);
   // Snow lodges on the tops of branches and leaf clumps.
   vec3 gn = normalize(vNormal);
   if (!gl_FrontFacing) gn = -gn;
-  float snowT = snowAmount(normalize(gn + n * 0.5), vWorld.xz * 2.0 + vWorld.y, vWorld.y) * (vLeaf > 0.5 ? 0.25 : 0.35);
+  float snowT = snowAmount(normalize(gn + n * 0.5), vWorld.xz * 2.0 + vWorld.y, vWorld.y) * (vLeaf > 0.5 && vLeaf < 3.5 ? 0.25 : 0.35);
   albedo = mix(albedo, SNOW_ALB, snowT);
   thin *= 1.0 - snowT;
 
   float shadow = shadowAt(vWorld + n * 0.3, 0.002);
   vec3 sun = sunRadiance(vWorld.y);
   vec3 moon = moonRadiance(vWorld.y);
-  float wrap = vLeaf > 0.5 ? 0.3 : 0.1;
+  float wrap = vLeaf > 0.5 && vLeaf < 3.5 ? 0.3 : 0.1;
   float ndl = clamp((dot(n, uSunDir) + wrap) / (1.0 + wrap), 0.0, 1.0);
   float ndlM = clamp((dot(n, uMoonDir) + wrap) / (1.0 + wrap), 0.0, 1.0);
   float ao = vAO;

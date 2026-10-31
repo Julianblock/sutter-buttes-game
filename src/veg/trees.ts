@@ -8,7 +8,7 @@ import { buildTree } from './treeGeometry';
 import { SPECIES_COUNT, treeFragment, treeVertex } from './treeShader';
 import { lowPower } from '../ui/device';
 
-export const TREE = { BLUE_OAK: 0, LIVE_OAK: 1, VALLEY_OAK: 2, COTTONWOOD: 3, SHRUB: 4, ALMOND: 5, WALNUT: 6, PRUNE: 7 } as const;
+export const TREE = { BLUE_OAK: 0, LIVE_OAK: 1, VALLEY_OAK: 2, COTTONWOOD: 3, SHRUB: 4, ALMOND: 5, WALNUT: 6, PRUNE: 7, PALM: 8, CONIFER: 9 } as const;
 
 export interface PlantedTree {
   x: number;
@@ -38,6 +38,8 @@ const LEAF_KF: number[][] = [
   [0.04, 0.9, 0.95, 1, 1, 1, 1, 1, 1, 0.9, 0.55, 0.1], // almond (Feb = blossom)
   [0.0, 0.0, 0.05, 0.6, 1, 1, 1, 1, 1, 0.85, 0.4, 0.03], // walnut
   [0.03, 0.08, 0.9, 1, 1, 1, 1, 1, 1, 0.85, 0.45, 0.06], // prune / peach (Mar = blossom)
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // fan palm
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // conifer
 ];
 
 // Leaf colour keyframes: [winter, spring, summer, fall] (sRGB hex).
@@ -50,8 +52,10 @@ const LEAF_COL: string[][] = [
   ['#5e5850', '#6d8a42', '#55683a', '#8a7a3e'],
   ['#5e5850', '#7a9a48', '#58703a', '#b39a3c'],
   ['#5e5850', '#6a8640', '#4f6236', '#94703a'],
+  ['#4e6a3a', '#5a7a3e', '#56713a', '#55703a'],
+  ['#2c3a26', '#344a2c', '#2f4128', '#2f4027'],
 ];
-const BARK = ['#8a857a', '#4c4640', '#5c554c', '#8a8274', '#4a4436', '#4a4038', '#8c877c', '#3e3530'];
+const BARK = ['#8a857a', '#4c4640', '#5c554c', '#8a8274', '#4a4436', '#4a4038', '#8c877c', '#3e3530', '#7a6e5e', '#5a4636'];
 
 /** Orchard rows on the survey grid: spacing (m), crown radius, height. */
 const ORCHARD: Record<number, { sp: number; spacing: number; row: number; r: number; h: number }> = {
@@ -103,9 +107,10 @@ export class Trees {
   readonly group = new THREE.Group();
   readonly material: THREE.ShaderMaterial;
   private tiles: Tile[] = [];
-  private geos: THREE.InstancedBufferGeometry[] = [];
-  private inst0: THREE.InstancedBufferAttribute[] = [];
-  private inst1: THREE.InstancedBufferAttribute[] = [];
+  /** Per species, per LOD. */
+  private geos: THREE.InstancedBufferGeometry[][] = [];
+  private inst0: THREE.InstancedBufferAttribute[][] = [];
+  private inst1: THREE.InstancedBufferAttribute[][] = [];
   private lastPos = new THREE.Vector3(1e9, 0, 0);
   private lastQuat = new THREE.Quaternion();
   private frustum = new THREE.Frustum();
@@ -146,26 +151,32 @@ export class Trees {
       side: THREE.DoubleSide,
     });
 
-    for (let lod = 0; lod < 3; lod++) {
-      const base = buildTree(lod as 0 | 1 | 2, 7 + lod);
-      const g = new THREE.InstancedBufferGeometry();
-      g.index = base.index;
-      for (const k of Object.keys(base.attributes)) g.setAttribute(k, base.attributes[k]);
-      const a0 = new THREE.InstancedBufferAttribute(new Float32Array(CAP[lod] * 4), 4);
-      const a1 = new THREE.InstancedBufferAttribute(new Float32Array(CAP[lod] * 4), 4);
-      a0.setUsage(THREE.DynamicDrawUsage);
-      a1.setUsage(THREE.DynamicDrawUsage);
-      g.setAttribute('aInst0', a0);
-      g.setAttribute('aInst1', a1);
-      g.instanceCount = 0;
-      const mesh = new THREE.Mesh(g, this.material);
-      mesh.frustumCulled = false;
-      this.group.add(mesh);
-      this.geos.push(g);
-      this.inst0.push(a0);
-      this.inst1.push(a1);
+    for (let sp = 0; sp < SPECIES_COUNT; sp++) {
+      this.geos.push([]);
+      this.inst0.push([]);
+      this.inst1.push([]);
+      for (let lod = 0; lod < 3; lod++) {
+        const base = buildTree(lod as 0 | 1 | 2, sp, 7 + lod);
+        const g = new THREE.InstancedBufferGeometry();
+        g.index = base.index;
+        for (const k of Object.keys(base.attributes)) g.setAttribute(k, base.attributes[k]);
+        g.instanceCount = 0;
+        const mesh = new THREE.Mesh(g, this.material);
+        mesh.frustumCulled = false;
+        this.group.add(mesh);
+        this.geos[sp].push(g);
+        this.inst0[sp].push(this.instAttr(g, 'aInst0', 256));
+        this.inst1[sp].push(this.instAttr(g, 'aInst1', 256));
+      }
     }
     this.decode(buf, zone, hf);
+  }
+
+  private instAttr(g: THREE.InstancedBufferGeometry, name: string, cap: number) {
+    const a = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+    a.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute(name, a);
+    return a;
   }
 
   /**
@@ -230,9 +241,11 @@ export class Trees {
           const a = seed * 6.2832 * 7, d = 12 + hash(seed * 9.1) * 30;
           const x = gx + Math.cos(a) * d, z = gz + Math.sin(a) * d;
           if (x < x0 || x >= x0 + TILE || z < z0 || z >= z0 + TILE) continue;
-          const sp = seed < 0.5 ? TREE.VALLEY_OAK : seed < 0.75 ? TREE.WALNUT : TREE.LIVE_OAK;
-          const r = 3 + hash(seed * 4.4) * 3.5;
-          add(x, z, r, sp === TREE.LIVE_OAK ? r * 1.2 + 3 : r * 1.6 + 4, sp, seed);
+          // Farmhouses: shade oaks and walnuts, a palm or two by the house, a windbreak conifer.
+          const sp = k < 3 && hash12(ci + 53, cj + 53) < 0.6 ? TREE.PALM : seed < 0.45 ? TREE.VALLEY_OAK : seed < 0.7 ? TREE.WALNUT : seed < 0.88 ? TREE.LIVE_OAK : TREE.CONIFER;
+          const r = sp === TREE.PALM ? 2.4 + seed * 0.5 : 3 + hash(seed * 4.4) * 3.5;
+          const h = sp === TREE.PALM ? 13 + hash(seed * 4.4) * 8 : sp === TREE.CONIFER ? r * 3 + 4 : sp === TREE.LIVE_OAK ? r * 1.2 + 3 : r * 1.6 + 4;
+          add(x, z, r, h, sp, seed);
         }
       }
     if (!out.length) return null;
@@ -316,7 +329,7 @@ export class Trees {
         if (Math.abs(dx) > reach || Math.abs(dz) > reach) continue;
         const sp = d[o + 6];
         if (sp === TREE.SHRUB) continue;
-        const trunk = sp >= TREE.ALMOND ? 0.2 : Math.min(0.7, Math.max(0.25, d[o + 4] * 0.08));
+        const trunk = sp === TREE.PALM ? 0.35 : sp >= TREE.ALMOND ? 0.2 : Math.min(0.7, Math.max(0.25, d[o + 4] * 0.08));
         const dist = Math.hypot(dx, dz);
         const depth = radius + trunk - dist;
         if (depth > 0 && (!best || depth > best.depth)) {
@@ -337,8 +350,10 @@ export class Trees {
       defines: { SHADOW_PASS: '' },
       side: THREE.DoubleSide,
     });
-    shadow.addCaster(this.geos[0], mat);
-    shadow.addCaster(this.geos[1], mat);
+    for (const g of this.geos) {
+      shadow.addCaster(g[0], mat);
+      shadow.addCaster(g[1], mat);
+    }
   }
 
   private decode(buf: ArrayBuffer, zone: number, hf: Heightfield) {
@@ -517,8 +532,9 @@ export class Trees {
     const cy = camera.position.y;
     const cz = camera.position.z;
     const n = [0, 0, 0];
-    const a0 = this.inst0.map((a) => a.array as Float32Array);
-    const a1 = this.inst1.map((a) => a.array as Float32Array);
+    const ns = this.geos.map(() => [0, 0, 0]);
+    const a0 = this.inst0.map((l) => l.map((a) => a.array as Float32Array));
+    const a1 = this.inst1.map((l) => l.map((a) => a.array as Float32Array));
     const half = TILE / 2 + 12;
     // Visible tiles nearest-first, so instance caps only ever drop the farthest trees.
     const vis: [number, Tile][] = [];
@@ -556,26 +572,53 @@ export class Trees {
           lod++;
           if (n[lod] >= CAP[lod]) continue;
         }
-        const k = n[lod]++ * 4;
-        a0[lod][k] = d[o];
-        a0[lod][k + 1] = d[o + 1];
-        a0[lod][k + 2] = d[o + 2];
-        a0[lod][k + 3] = d[o + 3];
-        a1[lod][k] = d[o + 4] * scale;
-        a1[lod][k + 1] = d[o + 5] * scale;
-        a1[lod][k + 2] = d[o + 6];
-        a1[lod][k + 3] = d[o + 7];
+        n[lod]++;
+        const sp = d[o + 6];
+        const k = ns[sp][lod]++ * 4;
+        if (k + 4 > a0[sp][lod].length) {
+          // Out of room for this species: double its buffers.
+          const grow = (old: Float32Array) => {
+            const a = new Float32Array(old.length * 2);
+            a.set(old);
+            return a;
+          };
+          a0[sp][lod] = grow(a0[sp][lod]);
+          a1[sp][lod] = grow(a1[sp][lod]);
+        }
+        const b0 = a0[sp][lod], b1 = a1[sp][lod];
+        b0[k] = d[o];
+        b0[k + 1] = d[o + 1];
+        b0[k + 2] = d[o + 2];
+        b0[k + 3] = d[o + 3];
+        b1[k] = d[o + 4] * scale;
+        b1[k + 1] = d[o + 5] * scale;
+        b1[k + 2] = sp;
+        b1[k + 3] = d[o + 7];
       }
     }
-    for (let lod = 0; lod < 3; lod++) {
-      this.geos[lod].instanceCount = n[lod];
-      this.inst0[lod].clearUpdateRanges();
-      this.inst0[lod].addUpdateRange(0, n[lod] * 4);
-      this.inst0[lod].needsUpdate = true;
-      this.inst1[lod].clearUpdateRanges();
-      this.inst1[lod].addUpdateRange(0, n[lod] * 4);
-      this.inst1[lod].needsUpdate = true;
-    }
+    for (let sp = 0; sp < this.geos.length; sp++)
+      for (let lod = 0; lod < 3; lod++) {
+        const g = this.geos[sp][lod];
+        const count = ns[sp][lod];
+        g.instanceCount = count;
+        for (const [list, arr, name] of [
+          [this.inst0, a0, 'aInst0'],
+          [this.inst1, a1, 'aInst1'],
+        ] as const) {
+          let attr = list[sp][lod];
+          if (arr[sp][lod] !== attr.array) {
+            g.deleteAttribute(name);
+            attr = new THREE.InstancedBufferAttribute(arr[sp][lod], 4);
+            attr.setUsage(THREE.DynamicDrawUsage);
+            g.setAttribute(name, attr);
+            list[sp][lod] = attr;
+          } else {
+            attr.clearUpdateRanges();
+            attr.addUpdateRange(0, count * 4);
+          }
+          attr.needsUpdate = true;
+        }
+      }
     this.counts = n;
   }
 }
