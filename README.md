@@ -28,6 +28,9 @@ The terrain, land cover, roads, buildings and trees all come from real survey da
 - **Under water.** The water is green and murky with caustics on the riverbed. Fifteen real species swim there: Chinook salmon, steelhead, white sturgeon, striped bass, Sacramento pikeminnow, sucker, hardhead, splittail, tule perch, Sacramento perch, largemouth bass, bluegill, channel catfish, carp and American shad. Each lives in its own habitat and season.
 - **The whole valley.** Away from the detailed imagery, procedural detail fills in: square-mile sections split into fields with crop rows and weedy ditches, flooded rice with levees and contour checks, and marsh with tule stands. Orchards, riverbank forest and farmstead groves grow in 3D around you wherever you fly.
 - **Easter eggs and lore.** About thirty discoveries are hidden around the Buttes, with a card for each one you find. Reach the summits, follow the rivers and spot the fish. Visit the witches' cemetery after dark. And stand on top of North Butte to see the Buttes as they were 1.6 million years ago.
+- **Learn mode.** A guided tour of every easter egg plus the landmarks around them: the three summits, Peace Valley, the Butte Sink, Gray Lodge, the Sutter Bypass, the rice and orchards, Ellis Lake, Hotel Marysville, the State Theatre, the Mary Aaron Museum, St. Joseph, Bok Kai and the Chinese American Museum. Each stop has a card with its history and a hint for unlocking it. Go there flies you straight in and sets things up: night for the ghosts, snow on the Buttes, the truck for a drive into the river, or a dive under the Feather. Auto runs the whole tour hands-free. Open it from the menu or press J.
+- **Map of discoveries.** The map marks every stop: gold stars for eggs you've found, question marks for the rest and blue diamonds for landmarks. Click a marker to fly there.
+- **Graphics.** Each tree species has its own shape: oaks with lobed crowns on bough limbs, vase-shaped orchard trees, Washingtonia palms with a thatch skirt, and conifers. Houses have pitched hip and gable roofs with eaves, porches, front doors facing the street, garages, chimneys, shutters and sash windows that reflect the sky, and they never sit in the road. People have proper proportions, with knees and elbows that bend as they walk. Landmarks carry their real signs: the neon HOTEL MARYSVILLE rooftop letters, the STATE blade over the theatre, and Bok Kai's swallowtail ridge, red doors, plaque and lanterns.
 - **Procedural sound.** Wind rises with airspeed and whistles in a stoop, and wingbeats are audible. The ambience follows the time, season and terrain: meadowlarks, red-winged blackbirds, crickets that chirp at the right rate for the temperature, frogs over the rice, cattle, coyotes and honking geese. A volume slider sits beside the mute button and remembers its setting.
 
 ## Controls
@@ -47,6 +50,10 @@ The terrain, land cover, roads, buildings and trees all come from real survey da
 | G | Switch between bird and truck |
 | B | Get out and walk |
 | N | Nightmare Mode |
+| J | Learn mode |
+| [ / ] | Previous / next Learn stop |
+| Enter | Go to the current Learn stop |
+| Y | Auto tour on or off |
 | Tab | Map |
 | Esc | Menu |
 
