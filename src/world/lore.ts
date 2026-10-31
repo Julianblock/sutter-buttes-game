@@ -24,6 +24,23 @@ const BUTTES = { x: -500, z: -1700 };
 
 type Spot = Discovery & { test: (s: LoreState) => boolean };
 
+/** Where Learn mode takes you to see a discovery, and what it takes to trigger. */
+export interface TourAt {
+  x: number;
+  z: number;
+  /** Height above the ground on arrival, or absolute `y`. */
+  alt?: number;
+  y?: number;
+  /** World state the find needs: after dark, in daylight, snow, under water, in the truck. */
+  setup?: 'night' | 'day' | 'snow' | 'dive' | 'drive';
+  hint: string;
+}
+
+export type TourStop = Discovery & { at: TourAt };
+
+/** Finds a point on a named river near a guess, for tours to the water. */
+export type WaterFinder = (name: RegExp, x: number, z: number, radius: number) => { x: number; z: number } | null;
+
 /** Peaks as mapped; the summit height comes from the terrain itself. */
 const PEAKS = {
   north: { x: 2467, z: -3392 },
@@ -91,11 +108,11 @@ export class Lore {
   readonly ids: string[];
 
   constructor(
-    hf: Heightfield,
+    private hf: Heightfield,
     private journal: Discoveries,
     private volcano: VolcanoVision,
-    witches: CemeteryPlan | undefined,
-    town?: Town | null,
+    private witches: CemeteryPlan | undefined,
+    private town?: Town | null,
   ) {
     const summit = (p: { x: number; z: number }) => {
       const h = hf.height(p.x, p.z);
@@ -207,6 +224,54 @@ export class Lore {
   }
 
   private northSummit: (s: LoreState) => boolean;
+
+  /** Every lore spot with somewhere to go and see it, in a sensible touring order. */
+  tour(findWater: WaterFinder): TourStop[] {
+    const buttesGround = this.hf.height(BUTTES.x, BUTTES.z);
+    const feather = findWater(/feather/i, 17351, -882, 4000) ?? { x: 17351, z: -882 };
+    const at: Record<string, TourAt | null> = {
+      'south-butte': { ...PEAKS.south, alt: 70, hint: 'Fly over the summit of South Butte.' },
+      'north-butte': { ...PEAKS.north, alt: 70, hint: 'Reach the top of North Butte, the highest point. Watch what happens.' },
+      'west-butte': { ...PEAKS.west, alt: 70, hint: 'Fly over the summit of West Butte.' },
+      'histum-yani': { ...BUTTES, y: Math.max(1000, buttesGround + 750), hint: 'Climb above 900 m over the Buttes.' },
+      ring: { ...BUTTES, y: 2050, hint: 'Climb very high, above 1,900 m, over the Buttes.' },
+      'witches-cemetery': this.witches ? { x: this.witches.cx, z: this.witches.cz, alt: 14, setup: 'day', hint: 'Visit the old cemetery under North Butte in daylight, low over the stones.' } : null,
+      sacramento: (() => {
+        const p = findWater(/sacramento/i, -8190, 6880, 6000);
+        return p && { ...p, alt: 22, hint: 'Fly low over the Sacramento River.' };
+      })(),
+      'butte-creek': (() => {
+        const p = findWater(/butte (creek|slough)/i, -7300, -5000, 7000);
+        return p && { ...p, alt: 18, hint: 'Fly low over Butte Creek or Butte Slough.' };
+      })(),
+      feather: { ...feather, alt: 22, hint: 'Fly low over the Feather River.' },
+      underwater: { ...feather, alt: 3, setup: 'dive', hint: 'Dive under the surface of a river or pond (hold Shift to dive).' },
+      'truck-underwater': { ...feather, setup: 'drive', hint: 'Drive the truck into deep water.' },
+      'snow-buttes': { ...BUTTES, y: buttesGround + 420, setup: 'snow', hint: 'Choose snow in the weather menu, then fly over the Buttes.' },
+    };
+    const town = this.town;
+    if (town) {
+      const lm = (id: string, alt: number, setup?: TourAt['setup'], hint = '') => {
+        const l = town.landmark(id);
+        return l ? { x: l.x, z: l.z, alt, setup, hint } : null;
+      };
+      at.marysville = lm('hotel', 60, undefined, 'Fly low over downtown Marysville.');
+      at.stjoseph = lm('stjoseph', 35, undefined, 'Fly past St. Joseph Church, on C Street.');
+      at.bokkai = lm('bokkai', 25, undefined, 'Find the temple on the Yuba levee at the foot of D Street.');
+      at.twincities = lm('twincities', 40, undefined, 'Cross the Feather River bridges between Yuba City and Marysville.');
+      at['saturday-night'] = lm('state', 20, 'night', 'Come downtown after dark and walk or fly low along D Street.');
+    }
+    const order = ['south-butte', 'north-butte', 'west-butte', 'histum-yani', 'ring', 'witches-cemetery', 'butte-creek', 'sacramento', 'feather', 'underwater', 'truck-underwater', 'marysville', 'stjoseph', 'bokkai', 'twincities', 'saturday-night', 'snow-buttes'];
+    const out: TourStop[] = [];
+    for (const id of order) {
+      const spot = this.spots.find((p) => p.id === id);
+      const a = at[id];
+      if (!spot || !a) continue;
+      const { test: _t, ...d } = spot;
+      out.push({ ...d, at: a });
+    }
+    return out;
+  }
 
   update(s: LoreState) {
     for (const spot of this.spots) {
