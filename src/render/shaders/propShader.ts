@@ -5,7 +5,7 @@ export const propVertex = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_vertex>
 uniform vec3 uCamPos;
-in float aPart;    // 0 wall, 1 roof, 2 metal
+in float aPart;    // 0 wall, 1 roof, 2 metal, 3 trim, 4 brick
 in vec4 aT0;       // x, y, z, angle
 in vec4 aT1;       // sx, sy, sz, kind (0 house, 1 shed, 2 silo, 3 tower, 4 hut, 5 vehicle)
 in vec4 aWall;     // rgb, lit
@@ -87,6 +87,17 @@ void main() {
     if (vPart > 1.5) { albedo = vec3(0.025); rough = 0.9; }
     else if (vPart > 0.5) { albedo = vec3(0.02, 0.025, 0.03); rough = 0.08; }
     else { albedo = vWall.rgb * 0.7; rough = 0.22; }
+  } else if (vPart > 3.5) {
+    // Chimney brick.
+    vec3 sc = vLocal * vScale;
+    float by = sc.y / 0.077;
+    float bx = (sc.x + sc.z) / 0.21 + 0.5 * mod(floor(by), 2.0);
+    albedo = vec3(0.54, 0.29, 0.22) * 0.55 * (0.85 + 0.25 * hash12(floor(vec2(bx, by))));
+    albedo = mix(albedo, vec3(0.4) * 0.55, max(step(0.86, fract(by)), step(0.93, fract(bx))) * 0.5);
+  } else if (vPart > 2.5) {
+    // Painted porch trim and deck.
+    albedo = vec3(0.9, 0.89, 0.85) * 0.55;
+    rough = 0.6;
   } else if (vPart > 1.5) {
     // Galvanised steel; weathered lattice towers are duller than new sheet.
     albedo = kind > 2.5 && kind < 3.5 ? vec3(0.36, 0.37, 0.38) : vec3(0.55, 0.56, 0.58);
@@ -104,17 +115,41 @@ void main() {
     vec2 cell = vec2(u / 3.2, sc.y / 2.9);
     vec2 f = fract(cell);
     vec2 id = floor(cell);
-    bool win = f.x > 0.3 && f.x < 0.72 && f.y > 0.35 && f.y < 0.8 && (id.y + 0.85) * 2.9 < vScale.y * 0.6;
-    if (win) {
+    bool rows = (id.y + 0.85) * 2.9 < vScale.y * 0.6 && hash12(vec2(id.x, vRoof.a * 31.0)) > 0.22;
+    bool win = rows && f.x > 0.3 && f.x < 0.72 && f.y > 0.35 && f.y < 0.8;
+    bool frame = rows && f.x > 0.27 && f.x < 0.75 && f.y > 0.3 && f.y < 0.83;
+    // Front door, centred under the porch.
+    bool front = vLocalN.z < -0.5 && kind < 0.5;
+    bool door = front && abs(sc.x) < 0.5 && sc.y > 0.3 && sc.y < 2.45;
+    bool doorFrame = front && abs(sc.x) < 0.62 && sc.y < 2.57;
+    if (door) {
+      vec3 dc = vec3[4](vec3(0.45, 0.1, 0.1), vec3(0.1, 0.13, 0.2), vec3(0.3, 0.2, 0.12), vec3(0.06))[int(vRoof.a * 3.99)];
+      albedo = dc * (0.85 + 0.15 * step(0.1, abs(fract(sc.y / 0.7) - 0.5)));
+      rough = 0.5;
+      win = false;
+      frame = false;
+    } else if (doorFrame) {
+      albedo = vec3(0.9, 0.89, 0.85) * 0.55;
+      win = false;
+      frame = false;
+    }
+    if (win && abs(f.x - 0.51) * 3.2 < 0.03) {
+      albedo = vec3(0.9, 0.89, 0.85) * 0.55;
+    } else if (win) {
+      vec3 V = normalize(uCamPos - vWorld);
+      float fres = pow(1.0 - clamp(dot(n, V), 0.0, 1.0), 4.0);
       albedo = vec3(0.04, 0.05, 0.06);
-      rough = 0.3;
+      rough = 0.1;
+      emit = skyRadianceDir(reflect(-V, n)) * (0.05 + 0.5 * fres) * (1.0 - uNight);
       float lit = step(0.68, hash12(id + vRoof.a * 91.0)) * vWall.a;
       vec3 warm = mix(vec3(1.0, 0.42, 0.12), vec3(0.9, 0.62, 0.36), hash12(id + 3.7));
       // TV flicker in a few rooms.
       float tv = step(0.93, hash12(id + 7.1));
       warm = mix(warm, vec3(0.45, 0.6, 1.0) * (0.6 + 0.4 * sin(uTime * 9.0 + id.x * 4.0)), tv);
-      emit = warm * warm * lit * uNight * 0.5 * uInvExposure;
+      emit += warm * warm * lit * uNight * 0.5 * uInvExposure;
       if (lit > 0.5) albedo = vec3(0.0);
+    } else if (frame) {
+      albedo = vec3(0.9, 0.89, 0.85) * 0.55;
     }
   } else if (kind > 1.5 && kind < 2.5) {
     // Silo: ribbed galvanised steel.

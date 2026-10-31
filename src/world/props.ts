@@ -36,7 +36,16 @@ function houseGeometry(): THREE.BufferGeometry {
   const slopes = new THREE.BufferGeometry();
   slopes.setAttribute('position', new THREE.Float32BufferAttribute(v.slice(0, 36), 3));
   slopes.computeVertexNormals();
-  return merge([withPart(walls, 0), withPart(gables, 0), withPart(slopes, 1)]);
+  // Front porch on the -z side: deck, posts and a shed roof; and a brick chimney.
+  const extra: THREE.BufferGeometry[] = [];
+  const bx = (sx: number, sy: number, sz: number, x: number, y: number, z: number, part: number) =>
+    extra.push(withPart(new THREE.BoxGeometry(sx, sy, sz).translate(x, y + sy / 2, z), part));
+  bx(0.62, 0.05, 0.19, 0, 0, -0.595, 3);
+  bx(0.66, 0.025, 0.22, 0, 0.42, -0.6, 1);
+  for (const px of [-0.3, -0.1, 0.1, 0.3]) bx(0.013, 0.37, 0.016, px, 0.05, -0.68, 3);
+  for (const px of [-0.2, 0.2]) bx(0.18, 0.012, 0.01, px, 0.17, -0.68, 3);
+  bx(0.055, 0.6, 0.07, 0.36, 0.5, 0.16, 4);
+  return merge([withPart(walls, 0), withPart(gables, 0), withPart(slopes, 1), ...extra]);
 }
 
 /** Unit shed: tall walls with a shallow metal roof. */
@@ -218,7 +227,7 @@ export class Props {
             const hw = 13 + s * 6, hd = 10 + s * 4;
             if (!this.clear(hx, hz, hw, hd, ang, 0)) continue;
             occ.add(kk);
-            addHouse(hx, hz, hw, hd, ang, s, seed, true);
+            addHouse(hx, hz, hw, hd, side > 0 ? ang : ang + Math.PI, s, seed, true);
           }
         }
       }
