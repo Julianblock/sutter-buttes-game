@@ -6,6 +6,7 @@ import type { Heightfield } from './heightfield';
 import { merge, StrutBuilder, withPart } from './geom';
 import { LC, type OsmData } from './meta';
 import { latticeGeometry, poleGeometry, PYLON, type Pylon } from './powerLines';
+import type { RoadIndex } from './roadIndex';
 
 export const KIND = { HOUSE: 0, SHED: 1, SILO: 2, TOWER: 3, HUT: 4 } as const;
 
@@ -97,7 +98,13 @@ export class Props {
   private batches: Batch[] = [];
 
   /** `skip` marks ground a detailed town draws itself (its buildings and infill stand down). */
-  constructor(osm: OsmData, hf: Heightfield, pylons: Pylon[] = [], skip: (x: number, z: number) => boolean = () => false) {
+  constructor(
+    osm: OsmData,
+    hf: Heightfield,
+    pylons: Pylon[] = [],
+    skip: (x: number, z: number) => boolean = () => false,
+    private roads?: RoadIndex,
+  ) {
     this.material = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
       vertexShader: propVertex,
@@ -136,10 +143,14 @@ export class Props {
         this.lights.push(x + Math.cos(ang) * w * 0.6, y, z + Math.sin(ang) * w * 0.6, warm[0], warm[1], warm[2], 0.8, 0);
       }
     };
-    osm.buildings.forEach(([x, z, w, d, ang], i) => {
-      const s = hash(i + x * 0.01);
+    osm.buildings.forEach(([x0, z0, w, d, ang], i) => {
+      const s = hash(i + x0 * 0.01);
       const area = w * d;
-      if (area < 12 || w > 400 || d > 400 || skip(x, z)) return;
+      if (area < 12 || w > 400 || d > 400 || skip(x0, z0)) return;
+      // Mapped footprints a few metres off the road centreline get nudged clear.
+      const spot = this.clear(x0, z0, w, d, ang, 6);
+      if (!spot) return;
+      const [x, z] = spot;
       const lc = hf.landcover(x, z);
       const urban = lc >= LC.URBAN_LOW && lc <= LC.URBAN_HIGH;
       const ratio = Math.max(w, d) / Math.max(1, Math.min(w, d));
@@ -204,8 +215,10 @@ export class Props {
             const hz = cz + ux * off * side;
             const kk = key(hx, hz);
             if (occ.has(kk) || !isUrban(hx, hz) || skip(hx, hz)) continue;
+            const hw = 13 + s * 6, hd = 10 + s * 4;
+            if (!this.clear(hx, hz, hw, hd, ang, 0)) continue;
             occ.add(kk);
-            addHouse(hx, hz, 13 + s * 6, 10 + s * 4, ang, s, seed, true);
+            addHouse(hx, hz, hw, hd, ang, s, seed, true);
           }
         }
       }
@@ -282,6 +295,41 @@ export class Props {
         this.batches.push({ geo: g, mesh, center: g.boundingSphere.center, radius: g.boundingSphere.radius, tower: k === KIND.TOWER });
       }
     });
+  }
+
+  /**
+   * Where a w x d footprint at (x, z) can stand clear of every road and its
+   * shoulder: the spot itself, or one pushed up to `slide` metres off the
+   * nearest road. Null if it can't be cleared.
+   */
+  private clear(x: number, z: number, w: number, d: number, ang: number, slide: number): [number, number] | null {
+    const roads = this.roads;
+    if (!roads) return [x, z];
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let worst = 0;
+      let nx = 0, nz = 0;
+      for (const [u, v] of [[0, 0], [1, 1], [1, -1], [-1, 1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const px = x + c * u * w * 0.5 - sn * v * d * 0.5;
+        const pz = z + sn * u * w * 0.5 + c * v * d * 0.5;
+        const r = roads.nearest(px, pz, 30);
+        if (!r) continue;
+        const need = r.halfWidth + 1.5 - r.dist;
+        if (need > worst) {
+          worst = need;
+          // Away from the road, perpendicular to it.
+          let ox = -r.dz, oz = r.dx;
+          if ((x - r.x) * ox + (z - r.z) * oz < 0) (ox = -ox), (oz = -oz);
+          nx = ox;
+          nz = oz;
+        }
+      }
+      if (worst <= 0) return [x, z];
+      if (slide <= 0 || worst > slide) return null;
+      x += nx * (worst + 0.5);
+      z += nz * (worst + 0.5);
+    }
+    return null;
   }
 
   /** Distance-culls far tiles and limits shadow casting to tiles near the focus. */

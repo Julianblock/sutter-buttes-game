@@ -143,7 +143,7 @@ async function boot() {
     const w = water.sample(x, z);
     return w.mask > 0.5 && w.level > heightfield.height(x, z);
   };
-  const props = new Props(world.osm, heightfield, power.pylons, (x, z) => allTowns.some((t) => t.covers(x, z)) || inWater(x, z));
+  const props = new Props(world.osm, heightfield, power.pylons, (x, z) => allTowns.some((t) => t.covers(x, z)) || inWater(x, z), roadIndex);
   const lights = new LightPoints([...props.lights, ...allTowns.flatMap((t) => t.lights)]);
   engine.scene.add(props.group, lights.points, power.mesh);
   const cemeteries = new Cemeteries(cemeteryPlans, heightfield);
