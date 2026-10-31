@@ -79,6 +79,11 @@ export class ChaseCamera {
     this.init = true;
   }
 
+  /** Jumps straight to the follow position on the next update (after a teleport). */
+  cut() {
+    this.init = false;
+  }
+
   cycle() {
     this.mode = CAMERA_MODES[(CAMERA_MODES.indexOf(this.mode) + 1) % CAMERA_MODES.length];
     this.cineTimer = 0;
@@ -151,6 +156,7 @@ export class ChaseCamera {
       desired.y += dist * Math.sin(pitch);
       lookAt.copy(target).addScaledVector(fwd, span * 1.5);
       follow = this.mode === 'far' ? 3 : 6;
+      if (bird.swimming) desired.y = Math.min(desired.y, bird.waterLevel - 0.35);
     }
 
     if (!this.init) {
